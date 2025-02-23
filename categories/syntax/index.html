@@ -1,18 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh-cn" dir="ltr">
     <head><meta charset='utf-8'>
-<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="Lorem ipsum dolor sit amet, consectetur adipiscing elit.">
-<title>Category: Syntax - Example Site</title>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="人生如畫冊 我有我的浪漫手法">
+<title>Category: Syntax - Z for 💤</title>
 
 <link rel='canonical' href='https://zouzhenshan.github.io/categories/syntax/'>
 
-<link rel="stylesheet" href="/scss/style.min.ff6479071396d4c7dbc6615f095e3ed6c71025ae25a20a0749bc9ffde628554f.css"><meta property='og:title' content="Category: Syntax - Example Site">
-<meta property='og:description' content="Lorem ipsum dolor sit amet, consectetur adipiscing elit.">
+<link rel="stylesheet" href="/scss/style.min.5ca050e90169466f5339147eebf996978ab6ba0211260d3208baeb84f14958c6.css"><meta property='og:title' content="Category: Syntax - Z for 💤">
+<meta property='og:description' content="人生如畫冊 我有我的浪漫手法">
 <meta property='og:url' content='https://zouzhenshan.github.io/categories/syntax/'>
-<meta property='og:site_name' content='Example Site'>
+<meta property='og:site_name' content='Z for 💤'>
 <meta property='og:type' content='website'><meta property='og:updated_time' content=' 2020-09-09T00:00:00&#43;00:00 '/>
-<meta name="twitter:title" content="Category: Syntax - Example Site">
-<meta name="twitter:description" content="Lorem ipsum dolor sit amet, consectetur adipiscing elit."><link rel="alternate" type="application/rss&#43;xml" href="https://zouzhenshan.github.io/categories/syntax/index.xml">
+<meta name="twitter:title" content="Category: Syntax - Z for 💤">
+<meta name="twitter:description" content="人生如畫冊 我有我的浪漫手法"><link rel="alternate" type="application/rss&#43;xml" href="https://zouzhenshan.github.io/categories/syntax/index.xml">
     <link rel="shortcut icon" href="/favicon.ico" />
 
   
@@ -72,8 +72,8 @@
         
         
         <div class="site-meta">
-            <h1 class="site-name"><a href="/">Example Site</a></h1>
-            <h2 class="site-description">Lorem ipsum dolor sit amet, consectetur adipiscing elit.</h2>
+            <h1 class="site-name"><a href="/">Z for 💤</a></h1>
+            <h2 class="site-description">人生如畫冊 我有我的浪漫手法</h2>
         </div>
     </header><ol class="menu-social">
             
@@ -398,7 +398,7 @@
     <section class="copyright">
         &copy; 
         
-        2025 Example Person
+        2025 zzs
     </section>
     
     <section class="powerby">
@@ -427,6 +427,53 @@
 
         document.head.appendChild(customFont);
     }());
+</script>
+ 
+<style>
+    #TableOfContents > ul, ol {
+        ul, ol {
+            display: none;
+        }
+        .open {
+            display: block;
+        }
+    }
+</style>
+
+<script>
+    function initTocHide() {
+        
+        let toc = document.querySelector(".widget--toc");
+        if (!toc) {
+            return;
+        }
+        
+        window.addEventListener('scroll', function() {
+            
+            let openUl = document.querySelectorAll(".open");
+            if (openUl.length > 0) {
+              openUl.forEach((ul) => {
+                ul.classList.remove("open")
+              })
+            }
+            
+            let currentLi = document.querySelector(".active-class");
+            if (!currentLi) {
+                return
+            }
+            
+            if (currentLi.children.length > 1) {
+                currentLi.children[1].classList.add("open")
+            }
+            
+            let ul = currentLi.parentElement;
+            do {
+                ul.classList.add("open");
+                ul = ul.parentElement.parentElement
+            } while (ul !== undefined && (ul.localName === 'ul' || ul.localName === 'ol'))
+        });
+    }
+    initTocHide()
 </script>
 
     </body>

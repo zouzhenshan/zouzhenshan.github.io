@@ -2,18 +2,18 @@
 <html lang="zh-cn" dir="ltr">
     <head>
 	<meta name="generator" content="Hugo 0.130.0"><meta charset='utf-8'>
-<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="Lorem ipsum dolor sit amet, consectetur adipiscing elit.">
-<title>Pager 2 - Example Site</title>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="人生如畫冊 我有我的浪漫手法">
+<title>Pager 2 - Z for 💤</title>
 
 <link rel='canonical' href='https://zouzhenshan.github.io/'>
 
-<link rel="stylesheet" href="/scss/style.min.ff6479071396d4c7dbc6615f095e3ed6c71025ae25a20a0749bc9ffde628554f.css"><meta property='og:title' content="Example Site">
-<meta property='og:description' content="Lorem ipsum dolor sit amet, consectetur adipiscing elit.">
+<link rel="stylesheet" href="/scss/style.min.5ca050e90169466f5339147eebf996978ab6ba0211260d3208baeb84f14958c6.css"><meta property='og:title' content="Z for 💤">
+<meta property='og:description' content="人生如畫冊 我有我的浪漫手法">
 <meta property='og:url' content='https://zouzhenshan.github.io/'>
-<meta property='og:site_name' content='Example Site'>
+<meta property='og:site_name' content='Z for 💤'>
 <meta property='og:type' content='website'><meta property='og:updated_time' content=' 2020-09-09T00:00:00&#43;00:00 '/>
-<meta name="twitter:title" content="Example Site">
-<meta name="twitter:description" content="Lorem ipsum dolor sit amet, consectetur adipiscing elit."><link rel="alternate" type="application/rss&#43;xml" href="https://zouzhenshan.github.io/index.xml">
+<meta name="twitter:title" content="Z for 💤">
+<meta name="twitter:description" content="人生如畫冊 我有我的浪漫手法"><link rel="alternate" type="application/rss&#43;xml" href="https://zouzhenshan.github.io/index.xml">
     <link rel="shortcut icon" href="/favicon.ico" />
 
   
@@ -73,8 +73,8 @@
         
         
         <div class="site-meta">
-            <h1 class="site-name"><a href="/">Example Site</a></h1>
-            <h2 class="site-description">Lorem ipsum dolor sit amet, consectetur adipiscing elit.</h2>
+            <h1 class="site-name"><a href="/">Z for 💤</a></h1>
+            <h2 class="site-description">人生如畫冊 我有我的浪漫手法</h2>
         </div>
     </header><ol class="menu-social">
             
@@ -362,6 +362,8 @@
     
     
     
+    
+    
     <div class="welcome">
         <p style="font-size: 2rem; text-align: center; font-weight: bold">
         <span class="shake">👋</span>
@@ -439,20 +441,6 @@
         
 
         
-            <div>
-                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
-  <path stroke="none" d="M0 0h24v24H0z"/>
-  <circle cx="12" cy="12" r="9" />
-  <polyline points="12 7 12 12 15 15" />
-</svg>
-
-
-
-                <time class="article-time--reading">
-                    阅读时长: 2 分钟
-                </time>
-            </div>
-        
     </footer>
     
 
@@ -501,20 +489,6 @@
             </div>
         
 
-        
-            <div>
-                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
-  <path stroke="none" d="M0 0h24v24H0z"/>
-  <circle cx="12" cy="12" r="9" />
-  <polyline points="12 7 12 12 15 15" />
-</svg>
-
-
-
-                <time class="article-time--reading">
-                    阅读时长: 1 分钟
-                </time>
-            </div>
         
     </footer>
     
@@ -585,20 +559,6 @@
         
 
         
-            <div>
-                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
-  <path stroke="none" d="M0 0h24v24H0z"/>
-  <circle cx="12" cy="12" r="9" />
-  <polyline points="12 7 12 12 15 15" />
-</svg>
-
-
-
-                <time class="article-time--reading">
-                    阅读时长: 1 分钟
-                </time>
-            </div>
-        
     </footer>
     
 
@@ -628,7 +588,7 @@
     <section class="copyright">
         &copy; 
         
-        2025 Example Person
+        2025 zzs
     </section>
     
     <section class="powerby">
@@ -656,6 +616,53 @@
 
         document.head.appendChild(customFont);
     }());
+</script>
+ 
+<style>
+    #TableOfContents > ul, ol {
+        ul, ol {
+            display: none;
+        }
+        .open {
+            display: block;
+        }
+    }
+</style>
+
+<script>
+    function initTocHide() {
+        
+        let toc = document.querySelector(".widget--toc");
+        if (!toc) {
+            return;
+        }
+        
+        window.addEventListener('scroll', function() {
+            
+            let openUl = document.querySelectorAll(".open");
+            if (openUl.length > 0) {
+              openUl.forEach((ul) => {
+                ul.classList.remove("open")
+              })
+            }
+            
+            let currentLi = document.querySelector(".active-class");
+            if (!currentLi) {
+                return
+            }
+            
+            if (currentLi.children.length > 1) {
+                currentLi.children[1].classList.add("open")
+            }
+            
+            let ul = currentLi.parentElement;
+            do {
+                ul.classList.add("open");
+                ul = ul.parentElement.parentElement
+            } while (ul !== undefined && (ul.localName === 'ul' || ul.localName === 'ol'))
+        });
+    }
+    initTocHide()
 </script>
 
     </body>

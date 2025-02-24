@@ -6,7 +6,7 @@
 
 <link rel='canonical' href='https://zouzhenshan.github.io/tags/emoji/'>
 
-<link rel="stylesheet" href="/scss/style.min.5ca050e90169466f5339147eebf996978ab6ba0211260d3208baeb84f14958c6.css"><meta property='og:title' content="Tag: Emoji - Z for 💤">
+<link rel="stylesheet" href="/scss/style.min.b7958771b241e029aeaf21f6422ab2147bb091c7342a688a077b3b3f61870833.css"><meta property='og:title' content="Tag: Emoji - Z for 💤">
 <meta property='og:description' content="人生如畫冊 我有我的浪漫手法">
 <meta property='og:url' content='https://zouzhenshan.github.io/tags/emoji/'>
 <meta property='og:site_name' content='Z for 💤'>
@@ -474,6 +474,53 @@
         });
     }
     initTocHide()
+</script>
+
+
+<style>
+    #backTopBtn {
+        display: none;
+        position: fixed;
+        bottom: 30px;
+        z-index: 99;
+        cursor: pointer;
+        width: 36px;
+        height: 36px;
+        background-image: url(https://zouzhenshan.github.io/icons/BackToTop.svg);
+    }
+</style>
+
+<script>
+    
+
+    function initScrollTop() {
+        let rightSideBar = document.querySelector(".right-sidebar");
+        if (!rightSideBar) {
+            return;
+        }
+        
+        let btn = document.createElement("div");
+        btn.id = "backTopBtn";
+        btn.onclick = backToTop
+        rightSideBar.appendChild(btn)
+        
+        window.onscroll = function() {
+            
+            if (document.body.scrollTop > 20 || document.documentElement.scrollTop > 20) {
+                btn.style.display = "block";
+            } else {
+                btn.style.display = "none";
+            }
+        };
+    }
+
+    
+
+    function backToTop(){
+        window.scrollTo({ top: 0, behavior: "smooth" })
+    }
+
+    initScrollTop();
 </script>
 
     </body>

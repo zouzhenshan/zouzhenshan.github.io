@@ -39,11 +39,8 @@
 &lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;p&#34;&gt;}&lt;/span&gt;
 &lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
 &lt;/div&gt;
-&lt;/div&gt;&lt;blockquote&gt;
-&lt;p&gt;[!NOTE]
-&lt;code&gt;cin &amp;gt;&amp;gt;&lt;/code&gt; 会自动跳过空白字符（空格、换行、制表符）。
-&lt;code&gt;cin &amp;gt;&amp;gt; s&lt;/code&gt; 读取到第一个空白符前的字符串（适合单词分割）。&lt;/p&gt;
-&lt;/blockquote&gt;
+&lt;/div&gt;&lt;p&gt;&lt;code&gt;cin &amp;gt;&amp;gt;&lt;/code&gt; 会自动跳过空白字符（空格、换行、制表符）。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;cin &amp;gt;&amp;gt; s&lt;/code&gt; 读取到第一个空白符前的字符串（适合单词分割）。&lt;/p&gt;
 &lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
 &lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
 &lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt; 1

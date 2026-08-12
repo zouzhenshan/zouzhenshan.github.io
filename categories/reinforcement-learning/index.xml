@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>Reinforcement Learning on Z for 💤</title>
+        <link>https://zouzhenshan.github.io/categories/reinforcement-learning/</link>
+        <description>Recent content in Reinforcement Learning on Z for 💤</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>zh-cn</language>
+        <copyright>zzs</copyright>
+        <lastBuildDate>Wed, 12 Aug 2026 00:00:00 +0000</lastBuildDate><atom:link href="https://zouzhenshan.github.io/categories/reinforcement-learning/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>Unitree G1 人形机器人 AMP-MoE 多技能运动控制</title>
+        <link>https://zouzhenshan.github.io/p/unitree-g1-amp-moe-multiskill/</link>
+        <pubDate>Wed, 12 Aug 2026 00:00:00 +0000</pubDate>
+        
+        <guid>https://zouzhenshan.github.io/p/unitree-g1-amp-moe-multiskill/</guid>
+        <description>&lt;video controls preload=&#34;metadata&#34; style=&#34;width: 100%; border-radius: 8px;&#34;&gt;
+  &lt;source src=&#34;g1_moe_no_hand.mp4&#34; type=&#34;video/mp4&#34;&gt;
+&lt;/video&gt;
+&lt;p&gt;项目目标不是训练一个单一动作策略，而是把已有的行走、上下台阶、跌倒恢复等能力融合到一个可部署的控制系统中，让机器人能在真实场景里根据身体状态自主选择合适技能，并在技能切换时保持动作连续、不过度抽搐、不因路由抖动导致任务失败。&lt;/p&gt;
+&lt;h2 id=&#34;项目背景&#34;&gt;项目背景
+&lt;/h2&gt;&lt;p&gt;控制对象为 Unitree G1 23 DoF 机器人，部署侧控制周期为 0.02 s，策略输出为 23 维 raw action，经缩放转换为关节目标。项目中预训练了两个主要专家：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;行走专家：DWAQ + AMP 训练得到，覆盖多地形行走、转向、上下台阶等移动能力。&lt;/li&gt;
+&lt;li&gt;起身专家：AMP get-up 策略，覆盖摔倒后的恢复站立。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;如果只把两个专家简单硬切换，机器人在切换瞬间会遇到三个问题：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;两个专家输出动作差距大，目标关节会突然跳变。&lt;/li&gt;
+&lt;li&gt;新切换的专家的历史观测里仍然包含上一专家执行过的动作，这是教师训练时没有见过的分布。&lt;/li&gt;
+&lt;li&gt;路由判断一旦在临界状态抖动，会放大动作跳变，表现为抽搐、僵直或二次跌倒。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;因此本项目的核心不是“有两个策略”，而是设计一套能让多个运动技能在闭环中稳定共存的融合机制。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://zouzhenshan.github.io/p/unitree-g1-amp-moe-multiskill/moe-architecture.png&#34;
+	width=&#34;1672&#34;
+	height=&#34;941&#34;
+	srcset=&#34;https://zouzhenshan.github.io/p/unitree-g1-amp-moe-multiskill/moe-architecture_hue36a23326e66faa580f5f01320cbf603_1055228_480x0_resize_box_3.png 480w, https://zouzhenshan.github.io/p/unitree-g1-amp-moe-multiskill/moe-architecture_hue36a23326e66faa580f5f01320cbf603_1055228_1024x0_resize_box_3.png 1024w&#34;
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;AMP-MoE 总体架构&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;177&#34;
+		data-flex-basis=&#34;426px&#34;
+	
+&gt;&lt;/p&gt;
+&lt;p&gt;图 1：AMP-MoE 总体架构。统一 510D 历史观测同时进入 walking expert、recovery expert、neural route heads 和 &lt;code&gt;STABLE_HOLD&lt;/code&gt; gate；路由头负责离散状态切换，门控网络只在 &lt;code&gt;STABLE_HOLD&lt;/code&gt; 状态对两个专家动作做加权软融合。&lt;/p&gt;
+&lt;h2 id=&#34;moe-融合架构&#34;&gt;MoE 融合架构
+&lt;/h2&gt;&lt;p&gt;最终部署模型保持单一输入输出契约：&lt;code&gt;510D observation -&amp;gt; 48D packed output&lt;/code&gt;。48 维输出由四部分组成：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;a_walk&lt;/code&gt;：23 维行走专家动作。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;a_recovery&lt;/code&gt;：23 维起身专家动作。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;p_need_recovery&lt;/code&gt;：是否需要进入恢复模式的神经路由概率。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;p_ready_to_handoff&lt;/code&gt;：是否已经适合从恢复模式交还给行走模式的神经路由概率。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;路由概率不直接作为动作混合系数，而是驱动一个带 hysteresis 和 timer 的部署状态机。实际控制采用：&lt;code&gt;WALKING/FALLING&lt;/code&gt; 使用行走专家，&lt;code&gt;RECOVERING&lt;/code&gt; 使用起身专家；&lt;code&gt;STABLE_HOLD&lt;/code&gt; 引入 MoE 门控网络，对 walking / recovery 两个专家动作做加权软融合；&lt;code&gt;HANDOFF&lt;/code&gt; 以 walking expert 为主，并通过命令 ramp 平滑恢复用户速度指令。&lt;/p&gt;
+&lt;p&gt;选择这个结构的原因：两个专家的状态分布差距过大，可明确区分时不需要加权融合动作输出，因此我只在这个边界状态使用门控软融合。实机部署时可解释性和安全边界仍然重要，所以神经网络负责判断恢复需求、交接时机和局部融合权重，确定性 supervisor 负责模式滞回、超时、启动状态、FAILSAFE 和命令置零等规则。&lt;/p&gt;
+&lt;h2 id=&#34;多技能融合处理&#34;&gt;多技能融合处理
+&lt;/h2&gt;&lt;h3 id=&#34;1-神经路由与门控融合分工&#34;&gt;1. 神经路由与门控融合分工
+&lt;/h3&gt;&lt;p&gt;路由网络只学习两个语义判断：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;当前状态是否需要 recovery expert 接管。&lt;/li&gt;
+&lt;li&gt;recovery 是否已经稳定到可以 handoff 回 walking expert。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;状态机使用进入/退出阈值、hold time 和 handoff duration 来避免边界抖动。这使路由输出可以有一定噪声，但控制模式不会逐帧来回跳。&lt;/p&gt;
+&lt;p&gt;门控网络只在 &lt;code&gt;STABLE_HOLD&lt;/code&gt; 状态启用，输出一个标量权重 &lt;code&gt;w_stable ∈ [0, 1]&lt;/code&gt;：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;a_stable = w_stable * a_walk + (1 - w_stable) * a_recovery
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;其中 &lt;code&gt;w_stable&lt;/code&gt; 接近 0 时更依赖 recovery expert 的站稳能力，接近 1 时更依赖 walking expert 的默认站立 / 起步能力。这样路由网络仍负责“是否进入 recovery / 是否可交接”的离散语义，门控网络只负责 &lt;code&gt;STABLE_HOLD&lt;/code&gt; 内部的连续动作接力。&lt;/p&gt;
+&lt;h3 id=&#34;2-dagger-解决教师没见过的融合分布&#34;&gt;2. DAgger 解决教师没见过的融合分布
+&lt;/h3&gt;&lt;p&gt;单独训练的 walking expert 和 recovery expert 都只见过自己的闭环分布。MoE 融合后，入站专家会读到另一专家刚刚执行过的动作历史，这属于明显的 out-of-distribution 输入。&lt;/p&gt;
+&lt;p&gt;本项目使用在线 DAgger 解决这个问题：训练时同时推进 oracle supervisor 和 student supervisor，episode 级采样由 oracle 或 student 执行动作，所有真实闭环状态都写入持久化分层 replay buffer。冻结教师只提供标签，学生专家和 route heads 在融合系统真实访问到的历史分布上学习。&lt;/p&gt;
+&lt;p&gt;buffer 按场景分层采样，覆盖平地 locomotion、上下台阶、跌倒恢复、stable handoff、near-fall、高角速度、recovery stuck 和二次跌倒等 hard cases。这样做的重点是让数据分布服务于系统故障模式，而不是只追求平均 imitation loss。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://zouzhenshan.github.io/p/unitree-g1-amp-moe-multiskill/dagger-training.png&#34;
+	width=&#34;1672&#34;
+	height=&#34;941&#34;
+	srcset=&#34;https://zouzhenshan.github.io/p/unitree-g1-amp-moe-multiskill/dagger-training_hu089089526646ee31d74b6e26bc9398eb_1285309_480x0_resize_box_3.png 480w, https://zouzhenshan.github.io/p/unitree-g1-amp-moe-multiskill/dagger-training_hu089089526646ee31d74b6e26bc9398eb_1285309_1024x0_resize_box_3.png 1024w&#34;
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;在线 DAgger 训练闭环&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;177&#34;
+		data-flex-basis=&#34;426px&#34;
+	
+&gt;&lt;/p&gt;
+&lt;p&gt;图 2：在线 DAgger 训练闭环。oracle supervisor 与 student supervisor 并行推进，通过 episode 级 beta 选择执行源，真实闭环状态写入 stratified replay；冻结教师提供标签，学生专家、route heads 和 &lt;code&gt;STABLE_HOLD&lt;/code&gt; gate 在融合系统实际访问到的分布上更新。&lt;/p&gt;
+&lt;h3 id=&#34;3-切换边界连续损失降低动作跳变&#34;&gt;3. 切换边界连续损失降低动作跳变
+&lt;/h3&gt;&lt;p&gt;针对状态 / 任务的切换顿挫，本项目加入了切换边界连续损失。核心思想是：与其完全依赖部署侧限速，不如让入站专家的 raw action 本身学会从上一拍实际执行动作附近出发。&lt;/p&gt;
+&lt;p&gt;在发生专家切换的帧上，损失直接约束入站学生专家动作与 &lt;code&gt;a_executed(t-1)&lt;/code&gt; 的距离。这个设计让学生专家在融合闭环分布里学会更自然的接力。后续引入 &lt;code&gt;STABLE_HOLD&lt;/code&gt; 门控后，边界连续损失还可以作用到融合后的 &lt;code&gt;a_stable&lt;/code&gt;，让门控权重本身也受到动作平滑目标约束。&lt;/p&gt;
+&lt;h3 id=&#34;4-stable_hold-门控网络训练&#34;&gt;4. STABLE_HOLD 门控网络训练
+&lt;/h3&gt;&lt;p&gt;&lt;code&gt;STABLE_HOLD&lt;/code&gt; 门控网络目标是在 recovery 完成后到 handoff 前的短窗口内减少动作跳变和站立抖动。是在实机部署测试后的优化处理，在 neural module 中增加一个轻量 gate head：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;w_stable = sigmoid(g(obs_510, p_need_recovery, p_ready_to_handoff, handoff_progress))
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;训练方式采用分阶段方案：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;先冻结 walking / recovery 两个专家和 route heads，只训练 gate head，避免一开始破坏已验证的专家能力。&lt;/li&gt;
+&lt;li&gt;从 DAgger replay 中筛选 &lt;code&gt;STABLE_HOLD&lt;/code&gt;、recovery -&amp;gt; stable、stable -&amp;gt; handoff 的边界帧，额外提高这些样本的采样比例。&lt;/li&gt;
+&lt;li&gt;用 oracle supervisor 生成候选标签：刚进入 stable 时偏向 recovery，稳定时间增长、躯干姿态接近直立、角速度下降、双脚支撑稳定后逐步偏向 walking。&lt;/li&gt;
+&lt;li&gt;损失函数由三部分组成：融合动作与 oracle final action 的 Huber imitation loss、相邻帧 &lt;code&gt;w_stable&lt;/code&gt; 的 temporal smoothness loss、融合后动作与上一拍执行动作的 boundary continuity loss。&lt;/li&gt;
+&lt;li&gt;加入 gate entropy / saturation 正则，让 gate 在明显状态下接近单专家，在边界状态下才保留软融合，而不是长期输出模糊权重。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;部署安全约束上，gate 只在 &lt;code&gt;STABLE_HOLD&lt;/code&gt; 内生效；&lt;code&gt;WALKING/FALLING/RECOVERING/FAILSAFE&lt;/code&gt; 仍沿用原来的确定性 expert selection。若 gate 输出非有限值、状态超时或姿态再次变差，supervisor 直接回退到 recovery 或 FAILSAFE。这样可以把软融合限制在“已基本站稳但尚未恢复行走命令”的低风险窗口里。&lt;/p&gt;
+&lt;h3 id=&#34;5-残差微调保持保守可控&#34;&gt;5. 残差微调保持保守可控
+&lt;/h3&gt;&lt;p&gt;从冻结的学生策略分叉，加入 bounded residual：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;a_walk = a_walk + delta_walk_max * tanh(r_walk(obs_510))
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;a_rec  = a_rec  + delta_rec_max  * tanh(r_rec(obs_510))
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;残差网络为 &lt;code&gt;510 -&amp;gt; 128 -&amp;gt; 64 -&amp;gt; 23&lt;/code&gt; 的 MLP，输出层零初始化，因此第 0 步与 P3 tensor-exact。逐关节 residual bound 被注册为 buffer，保证 PPO 探索也不能突破设定边界。在 action scale 为 0.25 的部署设置下，walking nominal target 偏移约束在 0.01-0.02 rad 量级，recovery 约束在 0.015-0.035 rad 量级。&lt;/p&gt;
+&lt;p&gt;这让微调具有两个好处：一方面可以通过 RL reward 补偿真实闭环中的不足，另一方面不会轻易破坏已经验证过的行走和起身能力。&lt;/p&gt;
+&lt;h2 id=&#34;训练过程中的工程设置&#34;&gt;训练过程中的工程设置
+&lt;/h2&gt;&lt;ol&gt;
+&lt;li&gt;先训练并验证教师策略 walking expert 和 recovery expert。&lt;/li&gt;
+&lt;li&gt;训练 neural route heads，让冻结专家可以由神经路由接管。&lt;/li&gt;
+&lt;li&gt;使用 DAgger 联合蒸馏，逐步解冻 recovery student 和 route heads，让专家适应融合后的真实历史分布。&lt;/li&gt;
+&lt;li&gt;在 &lt;code&gt;STABLE_HOLD&lt;/code&gt; 状态加入门控网络，先冻结专家只训练 gate head，再用边界连续损失和时序平滑损失约束软融合动作。&lt;/li&gt;
+&lt;li&gt;用 residual-first PPO 做保守微调，引入推力、摩擦、PD/motor strength 和执行器延时等鲁棒性课程。&lt;/li&gt;
+&lt;li&gt;针对实机暴露的问题，进一步做 no-hand recovery 与微调修正。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;训练细节包括：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;route observation 排除速度命令，只基于身体状态判断是否需要恢复。&lt;/li&gt;
+&lt;li&gt;walking context encoder 全阶段冻结，保护台阶和速度跟踪能力。&lt;/li&gt;
+&lt;li&gt;DAgger 使用分层 replay，不让大量普通行走帧淹没 near-fall、二次跌倒和 handoff 边界样本。&lt;/li&gt;
+&lt;li&gt;imitation loss 使用 support mask，避免在教师本身不支持或失败的状态上强行模仿。&lt;/li&gt;
+&lt;li&gt;residual PPO 中只有当前 FSM 选中的 expert family 参与 actor update，inactive head 不注入梯度； &lt;code&gt;STABLE_HOLD&lt;/code&gt; gate 训练会单独记录融合权重和融合动作，避免和 residual update 混淆。&lt;/li&gt;
+&lt;li&gt;部署前导出 TorchScript、ONNX packed/named 模型，并用 Python/C++ 测试检查 observation contract、supervisor、limiter 和 ONNX Runtime 等价性。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;https://zouzhenshan.github.io/p/unitree-g1-amp-moe-multiskill/training-pipeline.png&#34;
+	width=&#34;1672&#34;
+	height=&#34;941&#34;
+	srcset=&#34;https://zouzhenshan.github.io/p/unitree-g1-amp-moe-multiskill/training-pipeline_hue36a23326e66faa580f5f01320cbf603_1309470_480x0_resize_box_3.png 480w, https://zouzhenshan.github.io/p/unitree-g1-amp-moe-multiskill/training-pipeline_hue36a23326e66faa580f5f01320cbf603_1309470_1024x0_resize_box_3.png 1024w&#34;
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;阶段式训练路线&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;177&#34;
+		data-flex-basis=&#34;426px&#34;
+	
+&gt;&lt;/p&gt;
+&lt;p&gt;图 3：阶段式训练路线。先得到 walking / recovery 教师专家，再逐步加入 rule FSM、neural route、DAgger student、&lt;code&gt;STABLE_HOLD&lt;/code&gt; gate、bounded residual PPO 和 no-hand sim2real 修正，每一步都保留部署契约和回退路径。&lt;/p&gt;
+&lt;h2 id=&#34;部署侧状态机与安全契约&#34;&gt;部署侧状态机与安全契约
+&lt;/h2&gt;&lt;p&gt;部署侧保留 C++ supervisor，而不是把全部逻辑塞进神经网络。关键规则包括：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://zouzhenshan.github.io/p/unitree-g1-amp-moe-multiskill/deploy-supervisor.png&#34;
+	width=&#34;1672&#34;
+	height=&#34;941&#34;
+	srcset=&#34;https://zouzhenshan.github.io/p/unitree-g1-amp-moe-multiskill/deploy-supervisor_hue36a23326e66faa580f5f01320cbf603_1171079_480x0_resize_box_3.png 480w, https://zouzhenshan.github.io/p/unitree-g1-amp-moe-multiskill/deploy-supervisor_hue36a23326e66faa580f5f01320cbf603_1171079_1024x0_resize_box_3.png 1024w&#34;
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;部署侧 C&amp;#43;&amp;#43; supervisor 控制循环&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;177&#34;
+		data-flex-basis=&#34;426px&#34;
+	
+&gt;&lt;/p&gt;
+&lt;p&gt;图 4：部署侧 C++ supervisor 控制循环。ONNX policy 输出专家动作和路由概率，C++ supervisor 负责状态机、&lt;code&gt;STABLE_HOLD&lt;/code&gt; gate blend、handoff command ramp 与 FAILSAFE passive damping，最终生成 PD targets 并闭环回到机器人状态估计。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;startup 时根据实时姿态进入 &lt;code&gt;WALKING&lt;/code&gt;、&lt;code&gt;RECOVERING&lt;/code&gt; 或 &lt;code&gt;FAILSAFE&lt;/code&gt;，避免非站立启动被错误当作正常行走。&lt;/li&gt;
+&lt;li&gt;recovery 期间速度命令置零，&lt;code&gt;STABLE_HOLD&lt;/code&gt; 阶段计划使用 gate 对 walking / recovery 动作软融合，handoff 阶段用 alpha ramp 恢复用户命令。&lt;/li&gt;
+&lt;li&gt;历史观测在 reset 后用首个有效物理帧填充，&lt;code&gt;last_action&lt;/code&gt; 使用上一拍 supervisor 实际执行动作。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;sim2real-遇到的问题&#34;&gt;Sim2Real 遇到的问题
+&lt;/h2&gt;&lt;p&gt;初期实机部署主要问题来自三个现实因素：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;G1 手部不是理想刚体。仿真中的 hand / wrist 接触与实机明显不同，起身时手臂或手部接触地面会引入非预期形变和冲击。&lt;/li&gt;
+&lt;li&gt;实验地面摩擦系数较高，和训练里默认材质存在差异，导致恢复动作中的脚底滑移无法实现、支撑转换和上身接触时序变化。&lt;/li&gt;
+&lt;li&gt;地面不是刚性平面，而是铺在瓷砖上的海绵垫。海绵垫会形变，也会相对瓷砖滑动，机器人起身过程中等于同时遇到可形变接触和整体地面滑移。&lt;/li&gt;
+&lt;/ol&gt;
+</description>
+        </item>
+        
+    </channel>
+</rss>

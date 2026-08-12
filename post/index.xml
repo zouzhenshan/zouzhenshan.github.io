@@ -16,7 +16,7 @@
         <description>&lt;video controls preload=&#34;metadata&#34; style=&#34;width: 100%; border-radius: 8px;&#34;&gt;
   &lt;source src=&#34;g1_moe_no_hand.mp4&#34; type=&#34;video/mp4&#34;&gt;
 &lt;/video&gt;
-&lt;p&gt;项目目标不是训练一个单一动作策略，而是把已有的行走、上下台阶、跌倒恢复等能力融合到一个可部署的控制系统中，让机器人能在真实场景里根据身体状态自主选择合适技能，并在技能切换时保持动作连续、不过度抽搐、不因路由抖动导致任务失败。&lt;/p&gt;
+&lt;p&gt;项目目标是把已有的行走、上下台阶、跌倒恢复等能力融合到一个可部署的控制系统中，让机器人能在真实场景里根据身体状态自主选择合适技能，并在技能切换时保持动作连续、不过度抽搐、不因路由抖动导致任务失败。&lt;/p&gt;
 &lt;h2 id=&#34;项目背景&#34;&gt;项目背景
 &lt;/h2&gt;&lt;p&gt;控制对象为 Unitree G1 23 DoF 机器人，部署侧控制周期为 0.02 s，策略输出为 23 维 raw action，经缩放转换为关节目标。项目中预训练了两个主要专家：&lt;/p&gt;
 &lt;ul&gt;
@@ -29,7 +29,7 @@
 &lt;li&gt;新切换的专家的历史观测里仍然包含上一专家执行过的动作，这是教师训练时没有见过的分布。&lt;/li&gt;
 &lt;li&gt;路由判断一旦在临界状态抖动，会放大动作跳变，表现为抽搐、僵直或二次跌倒。&lt;/li&gt;
 &lt;/ol&gt;
-&lt;p&gt;因此本项目的核心不是“有两个策略”，而是设计一套能让多个运动技能在闭环中稳定共存的融合机制。&lt;/p&gt;
+&lt;p&gt;因此本项目的核心是设计一套能让多个运动技能在闭环中稳定共存的融合机制。&lt;/p&gt;
 &lt;p&gt;&lt;img src=&#34;https://zouzhenshan.github.io/p/unitree-g1-amp-moe-multiskill/moe-architecture.png&#34;
 	width=&#34;1672&#34;
 	height=&#34;941&#34;
@@ -45,6 +45,31 @@
 	
 &gt;&lt;/p&gt;
 &lt;p&gt;图 1：AMP-MoE 总体架构。统一 510D 历史观测同时进入 walking expert、recovery expert、neural route heads 和 &lt;code&gt;STABLE_HOLD&lt;/code&gt; gate；路由头负责离散状态切换，门控网络只在 &lt;code&gt;STABLE_HOLD&lt;/code&gt; 状态对两个专家动作做加权软融合。&lt;/p&gt;
+&lt;h2 id=&#34;教师专家策略训练&#34;&gt;教师专家策略训练
+&lt;/h2&gt;&lt;p&gt;先让 walking expert 和 recovery expert 在各自支持域内足够稳定，再把主要工程难点集中到路由、历史分布对齐和切换连续性上。&lt;/p&gt;
+&lt;h3 id=&#34;walking-expertdwaq--amp-多地形盲走&#34;&gt;Walking expert：DWAQ + AMP 多地形盲走
+&lt;/h3&gt;&lt;p&gt;walking expert 的目标是提供可部署的本体感知行走能力，覆盖平地速度跟踪、转向、上下台阶和轻度复杂地形。策略不依赖外部视觉输入，而是使用 proprioception history、关节状态、上一拍动作和速度命令等信息，通过隐变量估计补偿不可直接观测的地形 / 速度扰动。&lt;/p&gt;
+&lt;p&gt;训练上采用 PPO 主干，并联合 VAE 辅助任务与 AMP 判别器。PPO 负责速度跟踪、稳定性、能耗和接触行为等任务目标；VAE 辅助头学习从历史观测中估计速度和隐变量，提高盲走时对地形与动力学扰动的适应；AMP 判别器则约束动作风格，使行走、跑步和转向更接近参考运动数据。&lt;/p&gt;
+&lt;p&gt;walking expert 的训练重点包括：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;使用多地形 curriculum，从平地速度跟踪逐步扩展到上下台阶和轻度粗糙地形。&lt;/li&gt;
+&lt;li&gt;在命令采样中覆盖前进、后退、横移、原地转向和 yaw tracking，避免策略只在单一速度方向上表现好。&lt;/li&gt;
+&lt;li&gt;加入摩擦、PD gain、motor strength 和 action delay 等域随机化，为后续 sim2real 留出鲁棒性。&lt;/li&gt;
+&lt;li&gt;保持 walking context encoder 在后续 MoE 训练中冻结，避免 DAgger / residual 阶段破坏已经验证过的台阶和速度跟踪能力。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这个专家承担 MoE 中的“默认运动能力”：只要机器人处于直立或接近直立状态，系统就优先信任 walking expert，而不是让恢复策略长期参与正常行走。&lt;/p&gt;
+&lt;h3 id=&#34;recovery-expertamp-get-up-跌倒恢复&#34;&gt;Recovery expert：AMP get-up 跌倒恢复
+&lt;/h3&gt;&lt;p&gt;recovery expert 的目标是覆盖机器人从摔倒、侧躺、仰躺、俯卧等非站立姿态恢复到稳定站立的过程。它和 walking expert 的状态分布差异很大：训练数据中包含大量身体、手臂、膝盖、躯干与地面的接触，动作目标不是速度跟踪，而是尽快建立支撑、抬升躯干、调整双脚落点并回到稳定站姿。&lt;/p&gt;
+&lt;p&gt;训练时使用 AMP get-up 任务，把参考起身动作作为风格先验，同时叠加明确的任务奖励。奖励设计更关注恢复过程中的阶段性目标，例如 base height、upright、双脚支撑、角速度降低、足部站宽 / 前后对齐、恢复时间和非期望身体接触惩罚。相比直接追踪单条 motion，AMP 能让策略在不同摔倒初始姿态和随机扰动下仍保持自然动作风格。&lt;/p&gt;
+&lt;p&gt;recovery expert 的训练重点包括：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;使用随机初始化和跌倒姿态采样，覆盖不同朝向、不同身体接触和不同恢复入口。&lt;/li&gt;
+&lt;li&gt;对关键身体接触设置奖励与惩罚，允许恢复早期合理接触地面，但在站稳后抑制躯干、膝盖、手臂等非期望接触。&lt;/li&gt;
+&lt;li&gt;加入恢复时间代价和稳定站立奖励，促使策略不是“做完动作”，而是真正闭环站稳。&lt;/li&gt;
+&lt;li&gt;移除对手部刚体接触的依赖，针对实机手部非刚体、地垫形变和高摩擦地面重新微调 recovery 行为。&lt;/li&gt;
+&lt;li&gt;对 recovery observation 做 term-wise clip，抑制 PhysX depenetration 或实机接触冲击带来的极端观测值。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这个专家承担 MoE 中的“安全恢复能力”：当路由判断当前姿态已经离开 walking 支持域时，系统切入 recovery expert，并在恢复完成后通过 &lt;code&gt;STABLE_HOLD&lt;/code&gt; gate 和 handoff 逻辑平滑交还给 walking expert。&lt;/p&gt;
 &lt;h2 id=&#34;moe-融合架构&#34;&gt;MoE 融合架构
 &lt;/h2&gt;&lt;p&gt;最终部署模型保持单一输入输出契约：&lt;code&gt;510D observation -&amp;gt; 48D packed output&lt;/code&gt;。48 维输出由四部分组成：&lt;/p&gt;
 &lt;ul&gt;

@@ -264,7 +264,7 @@ sequenceDiagram
         <item>
         <title>Apollo 10.0 模型预测控制器源码分析</title>
         <link>https://zouzhenshan.github.io/p/apollo-10-mpc-source-analysis/</link>
-        <pubDate>Thu, 13 Aug 2026 00:00:00 +0000</pubDate>
+        <pubDate>Fri, 29 May 2026 00:00:00 +0000</pubDate>
         
         <guid>https://zouzhenshan.github.io/p/apollo-10-mpc-source-analysis/</guid>
         <description>&lt;h2 id=&#34;模型&#34;&gt;模型
@@ -546,7 +546,7 @@ $$\delta_{ss}=\kappa(L+\frac{mv_x^2}{L}(\frac{l_r}{C_f}-\frac{l_f}{C_r}))$$
         <item>
         <title>车辆转向补偿方法</title>
         <link>https://zouzhenshan.github.io/p/steering-compensation-method/</link>
-        <pubDate>Thu, 13 Aug 2026 00:00:00 +0000</pubDate>
+        <pubDate>Tue, 29 Jul 2025 00:00:00 +0000</pubDate>
         
         <guid>https://zouzhenshan.github.io/p/steering-compensation-method/</guid>
         <description>&lt;h2 id=&#34;一阶惯性环节补偿&#34;&gt;一阶惯性环节补偿

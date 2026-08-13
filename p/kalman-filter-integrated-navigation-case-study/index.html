@@ -10,7 +10,7 @@
 <meta property='og:description' content="卡尔曼滤波、无迹卡尔曼滤波原理推导与组合导航案例分析笔记。">
 <meta property='og:url' content='https://zouzhenshan.github.io/p/kalman-filter-integrated-navigation-case-study/'>
 <meta property='og:site_name' content='Z for 💤'>
-<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:published_time' content='2026-08-13T00:00:00&#43;00:00'/><meta property='article:modified_time' content='2026-08-13T00:00:00&#43;00:00'/>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:published_time' content='2026-05-13T00:00:00&#43;00:00'/><meta property='article:modified_time' content='2026-05-13T00:00:00&#43;00:00'/>
 <meta name="twitter:title" content="卡尔曼滤波与组合导航案例分析">
 <meta name="twitter:description" content="卡尔曼滤波、无迹卡尔曼滤波原理推导与组合导航案例分析笔记。">
     <link rel="shortcut icon" href="/favicon.ico" />
@@ -213,7 +213,7 @@
   <path d="M3 11h16" />
   <path d="M18 16.496v1.504l1 1" />
 </svg>
-                <time class="article-time--published">Aug 13, 2026</time>
+                <time class="article-time--published">May 13, 2026</time>
             </div>
         
 
@@ -542,8 +542,8 @@ $$n + \lambda = \alpha^2 (n + \kappa) $$
 </h2><h3 id="核心概念与系统建模">核心概念与系统建模
 </h3><h4 id="为什么需要融合">为什么需要融合？
 </h4><ul>
-<li><strong>INS（惯性导航）：</strong> 高频（100-1000Hz），短期精度极高，完全自主。但存在零偏，积分运算会导致误差随时间呈多项式级爆炸（位置漂移）。</li>
-<li><strong>GPS（全球定位）：</strong> 低频（1-10Hz），长期精度高，误差不累加。但在城市峡谷易受干扰，存在多路径效应。</li>
+<li><strong>INS：</strong> 高频（100-1000Hz），短期精度极高，完全自主。但存在零偏，积分运算会导致误差随时间呈多项式级爆炸（位置漂移）。</li>
+<li><strong>GPS：</strong> 低频（1-10Hz），长期精度高，误差不累加。但在城市峡谷易受干扰，存在多路径效应。</li>
 <li><strong>融合策略：</strong> 利用 INS 填补 GPS 频率间的空白，利用 GPS 限制 INS 的长期发散，并实时估计（在线标定）INS 的零偏。</li>
 </ul>
 <h4 id="状态向量的定义">状态向量的定义
@@ -596,7 +596,6 @@ $$P_{k|k-1} = F_k P_{k-1} F_k^T + Q_k $$
 <li>\(F_k\) 是误差状态连续系统雅可比矩阵离散化后的状态转移矩阵。</li>
 <li>\(Q_k\) 是 IMU 噪声（过程噪声）的协方差矩阵。</li>
 </ul>
-<p><em>(此步骤意味着：虽然我们认为当前的误差期望是0，但随着不断盲目积分，系统的不确定性 \(P\) 正在迅速膨胀)。</em></p>
 <h4 id="阶段二gps-低频触发">阶段二：GPS 低频触发
 </h4><p>当可靠的 GPS 数据 \(y_{GPS}\) 到来时，卡尔曼滤波介入以计算真实的误差状态。</p>
 <p><strong>计算观测创新（残差）：</strong>
@@ -615,8 +614,6 @@ $$K_k = P_{k|k-1} H_k^T S_k^{-1} $$
 <p><strong>计算误差状态的后验估计：</strong>
 </p>
 $$\delta \hat{x}_k = K_k e_k $$
-<p>
-<em>(通过卡尔曼滤波，终于反推算出了这段时间内累积的零偏漂移和位姿误差)</em>。</p>
 <p><strong>4更新协方差矩阵：</strong>
 </p>
 $$P_k = (I - K_k H_k) P_{k|k-1} $$
@@ -638,7 +635,7 @@ $$\delta \hat{x}_k \leftarrow 0 $$
 </h3><h4 id="41-时间同步">4.1 时间同步
 </h4><ul>
 <li><strong>痛点：</strong> 哪怕 GPS 和 IMU 时间戳相差仅 10ms，在 120km/h 车速下也会产生 0.33 米的物理偏差。这个偏差会被滤波器误认为是 IMU 的零偏，导致系统在反向补偿时彻底跑飞。</li>
-<li><strong>解法：</strong> 必须使用硬件级 PPS（秒脉冲信号）硬中断，将 GPS 和 IMU 锁存对齐，达到微秒（\(\mu s\)）级同步。</li>
+<li><strong>解法：</strong> 必须使用硬件级 PPS 硬中断，将 GPS 和 IMU 锁存对齐，达到微秒（\(\mu s\)）级同步。</li>
 </ul>
 <h4 id="42-野值检测马氏距离">4.2 野值检测：马氏距离
 </h4><ul>
@@ -657,7 +654,7 @@ $$\hat{R}_k = \alpha \hat{R}_{k-1} + (1-\alpha)(e_k e_k^T - H P_{k|k-1} H^T) $$
 <h4 id="44-零速修正技术">4.4 零速修正技术
 </h4><ul>
 <li><strong>痛点：</strong> 车辆停在红绿灯 3 分钟，GPS 存在静态漂移，会干扰系统。</li>
-<li><strong>解法：</strong> 结合轮速计或 IMU 静态检测。一旦判定车辆彻底静止，向滤波器强制注入高精度的虚拟观测 \([v_x, v_y, v_z] = [0, 0, 0]\)。这相当于定海神针，滤波器能利用这段停车时间，极其精确地反向标定收敛 \(b_a\) 和 \(b_g\) 零偏！</li>
+<li><strong>解法：</strong> 结合轮速计或 IMU 静态检测。一旦判定车辆彻底静止，向滤波器强制注入高精度的虚拟观测 \([v_x, v_y, v_z] = [0, 0, 0]\)。滤波器能利用这段停车时间，反向标定收敛 \(b_a\) 和 \(b_g\) 零偏！</li>
 </ul>
 <h4 id="45-多路径检测">4.5 多路径检测
 </h4><ul>

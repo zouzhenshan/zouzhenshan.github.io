@@ -178,25 +178,6 @@
             </a>
         </li>
         
-        
-        <li >
-            <a href='/links/' >
-                
-                
-                
-                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-link" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
-  <path stroke="none" d="M0 0h24v24H0z"/>
-  <path d="M10 14a3.5 3.5 0 0 0 5 0l4 -4a3.5 3.5 0 0 0 -5 -5l-.5 .5" />
-  <path d="M14 10a3.5 3.5 0 0 0 -5 0l-4 4a3.5 3.5 0 0 0 5 5l.5 -.5" />
-</svg>
-
-
-
-                
-                <span>Links</span>
-            </a>
-        </li>
-        
         <li class="menu-bottom-section">
             <ol class="menu">
 
@@ -378,6 +359,28 @@
     </a>
 </article>
         
+            <article>
+    <a href="/categories/reinforcement-learning/">
+        <div class="article-details">
+            <h2 class="article-title">Reinforcement Learning</h2>
+            <footer class="article-time">
+                <time datetime='2026-08-12T00:00:00Z'>Aug 12, 2026</time>
+            </footer>
+        </div>
+    </a>
+</article>
+        
+            <article>
+    <a href="/categories/robotics/">
+        <div class="article-details">
+            <h2 class="article-title">Robotics</h2>
+            <footer class="article-time">
+                <time datetime='2026-08-12T00:00:00Z'>Aug 12, 2026</time>
+            </footer>
+        </div>
+    </a>
+</article>
+        
     </section>
     <nav class='pagination'>
         
@@ -404,6 +407,8 @@
     </section>
     
     <section class="powerby">
+        
+            博客内容由AI辅助撰写 <br/>
         使用 <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> 构建 <br />
         主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
     </section>
@@ -516,49 +521,162 @@
 
 <style>
     #backTopBtn {
-        display: none;
+        --back-top-size: 46px;
+        --progress-offset: 125.66;
         position: fixed;
-        bottom: 30px;
-        z-index: 99;
+        left: var(--back-top-left, auto);
+        right: var(--back-top-right, 22px);
+        bottom: max(22px, env(safe-area-inset-bottom));
+        z-index: 100;
+        width: var(--back-top-size);
+        height: var(--back-top-size);
+        display: grid;
+        place-items: center;
+        padding: 0;
+        border: 1px solid var(--card-separator-color);
+        border-radius: 50%;
+        color: var(--accent-color);
+        background: var(--card-background);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
         cursor: pointer;
-        width: 36px;
-        height: 36px;
-        color: var(--body-text-color);
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(12px) scale(0.92);
+        transition:
+            opacity 0.2s ease,
+            transform 0.2s ease,
+            box-shadow 0.2s ease,
+            border-color 0.2s ease,
+            color 0.2s ease;
+    }
+
+    #backTopBtn .back-top-progress {
+        position: absolute;
+        inset: 3px;
+        width: calc(100% - 6px);
+        height: calc(100% - 6px);
+        transform: rotate(-90deg);
+        overflow: visible;
+    }
+
+    #backTopBtn .back-top-progress-track,
+    #backTopBtn .back-top-progress-value {
+        fill: none;
+        stroke-width: 2.4;
+    }
+
+    #backTopBtn .back-top-progress-track {
+        stroke: var(--card-separator-color);
+    }
+
+    #backTopBtn .back-top-progress-value {
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-dasharray: 125.66;
+        stroke-dashoffset: var(--progress-offset);
+        transition: stroke-dashoffset 0.12s linear;
+    }
+
+    #backTopBtn.is-visible {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateY(0) scale(1);
+    }
+
+    #backTopBtn:hover {
+        color: var(--accent-color-darker);
+        border-color: var(--accent-color);
+        box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18);
+        transform: translateY(-3px) scale(1.02);
+    }
+
+    #backTopBtn:focus-visible {
+        outline: 3px solid var(--accent-color);
+        outline-offset: 3px;
+    }
+
+    #backTopBtn .back-top-icon {
+        position: relative;
+        width: 21px;
+        height: 21px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2.2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+
+    [data-scheme="dark"] #backTopBtn {
+        box-shadow: 0 12px 34px rgba(0, 0, 0, 0.34);
+    }
+
+    @media (max-width: 767px) {
+        #backTopBtn {
+            --back-top-size: 42px;
+            --back-top-left: auto;
+            --back-top-right: 18px;
+            right: 18px;
+            bottom: max(18px, env(safe-area-inset-bottom));
+        }
     }
 </style>
 
 <script>
-    
-
-    function initScrollTop() {
-        let rightSideBar = document.querySelector(".right-sidebar");
-        if (!rightSideBar) {
-            return;
-        }
-        
-        let btn = document.createElement("div");
+    function initBackToTop() {
+        const btn = document.createElement("button");
         btn.id = "backTopBtn";
-        btn.onclick = backToTop;
-        btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" width="36" height="36" stroke-width="1.75"> <path d="M16 12l-4 -4l-4 4"></path> <path d="M12 16v-8"></path> <path d="M12 3c7.2 0 9 1.8 9 9s-1.8 9 -9 9s-9 -1.8 -9 -9s1.8 -9 9 -9z"></path> </svg>`;
-        rightSideBar.appendChild(btn);
-        
-        window.onscroll = function() {
-            
-            if (document.body.scrollTop > 20 || document.documentElement.scrollTop > 20) {
-                btn.style.display = "block";
-            } else {
-                btn.style.display = "none";
+        btn.type = "button";
+        btn.setAttribute("aria-label", "返回顶部");
+        btn.title = "返回顶部";
+        btn.innerHTML = `
+            <svg class="back-top-progress" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44" aria-hidden="true">
+                <circle class="back-top-progress-track" cx="22" cy="22" r="20"></circle>
+                <circle class="back-top-progress-value" cx="22" cy="22" r="20"></circle>
+            </svg>
+            <svg class="back-top-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 19V5"></path>
+                <path d="m5 12 7-7 7 7"></path>
+            </svg>`;
+
+        document.body.appendChild(btn);
+
+        const progressLength = 2 * Math.PI * 20;
+
+        const updateBackTopPosition = () => {
+            const anchor = document.querySelector(".right-sidebar .section-title");
+            const isMobile = window.matchMedia("(max-width: 767px)").matches;
+
+            if (!anchor || isMobile || !anchor.getClientRects().length) {
+                btn.style.setProperty("--back-top-left", "auto");
+                btn.style.setProperty("--back-top-right", isMobile ? "18px" : "22px");
+                return;
             }
+
+            const anchorLeft = Math.round(anchor.getBoundingClientRect().left);
+            btn.style.setProperty("--back-top-left", `${anchorLeft}px`);
+            btn.style.setProperty("--back-top-right", "auto");
         };
+
+        const updateBackTopState = () => {
+            const scrollTop = document.documentElement.scrollTop || document.body.scrollTop;
+            const scrollHeight = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+            const progress = scrollHeight > 0 ? Math.min(scrollTop / scrollHeight, 1) : 0;
+
+            btn.classList.toggle("is-visible", scrollTop > 280);
+            btn.style.setProperty("--progress-offset", `${progressLength * (1 - progress)}`);
+        };
+
+        btn.addEventListener("click", () => {
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        });
+
+        window.addEventListener("scroll", updateBackTopState, { passive: true });
+        window.addEventListener("resize", updateBackTopPosition);
+        updateBackTopPosition();
+        updateBackTopState();
     }
 
-    
-
-    function backToTop(){
-        window.scrollTo({ top: 0, behavior: "smooth" })
-    }
-
-    initScrollTop();
+    initBackToTop();
 </script>
 
     </body>

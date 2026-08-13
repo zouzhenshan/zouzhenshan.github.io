@@ -234,6 +234,19 @@
                 
                     
 <article class="">
+    <a href="/categories/autonomous-vehicle/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Autonomous Vehicle</h2>
+        </div>
+    </a>
+</article>
+
+                
+                    
+<article class="">
     <a href="/categories/reinforcement-learning/">
         
         
@@ -253,19 +266,6 @@
 
         <div class="article-details">
             <h2 class="article-title">Robotics</h2>
-        </div>
-    </a>
-</article>
-
-                
-                    
-<article class="">
-    <a href="/categories/c&#43;&#43;/">
-        
-        
-
-        <div class="article-details">
-            <h2 class="article-title">C&#43;&#43;</h2>
         </div>
     </a>
 </article>
@@ -311,6 +311,17 @@
         <div class="article-list--compact">
             
                 <article>
+    <a href="/p/autonomous-vehicle-experiment-platform-control-system-design/">
+        <div class="article-details">
+            <h2 class="article-title">自动驾驶车辆实验平台控制系统设计</h2>
+            <footer class="article-time">
+                <time datetime='2026-08-13T00:00:00Z'>Aug 13, 2026</time>
+            </footer>
+        </div>
+    </a>
+</article>
+            
+                <article>
     <a href="/p/unitree-g1-amp-moe-multiskill/">
         <div class="article-details">
             <h2 class="article-title">Unitree G1 人形机器人 AMP-MoE 多技能运动控制</h2>
@@ -318,34 +329,6 @@
                 <time datetime='2026-08-12T00:00:00Z'>Aug 12, 2026</time>
             </footer>
         </div>
-    </a>
-</article>
-            
-        </div>
-    </div>
-    
-    
-    <div class="archives-group" id="2025">
-        <h2 class="archives-date section-title"><a href="/archives/#2025">2025</a></h2>
-        <div class="article-list--compact">
-            
-                <article>
-    <a href="/p/acm_io_cpp/">
-        <div class="article-details">
-            <h2 class="article-title">ACM模式常用输入输出写法（C&#43;&#43;）</h2>
-            <footer class="article-time">
-                <time datetime='2025-04-13T00:00:00Z'>Apr 13, 2025</time>
-            </footer>
-        </div>
-            <div class="article-image">
-                <img src="/p/acm_io_cpp/ACM_IO_CPP_huf2d1a32235e2c5a88611ab175bc9ce3a_165613_120x120_fill_box_smart1_3.png" 
-                        width="120"
-                        height="120" 
-                        alt="ACM模式常用输入输出写法（C&#43;&#43;）"
-                        loading="lazy">
-                
-            </div>
-        
     </a>
 </article>
             
@@ -363,8 +346,6 @@
     </section>
     
     <section class="powerby">
-        
-            customText <br/>
         使用 <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> 构建 <br />
         主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
     </section>
@@ -435,6 +416,43 @@
         });
     }
     initTocHide()
+</script>
+
+
+<script>
+    (function initMermaid() {
+        const codeBlocks = document.querySelectorAll('pre code.language-mermaid');
+        codeBlocks.forEach((block) => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'mermaid';
+            wrapper.textContent = block.textContent;
+            block.parentElement.replaceWith(wrapper);
+        });
+
+        const diagrams = document.querySelectorAll('.mermaid');
+        if (!diagrams.length) {
+            return;
+        }
+
+        function renderMermaid() {
+            mermaid.initialize({
+                startOnLoad: false,
+                securityLevel: 'strict',
+                theme: 'default'
+            });
+            mermaid.run({ nodes: diagrams });
+        }
+
+        if (window.mermaid) {
+            renderMermaid();
+            return;
+        }
+
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';
+        script.onload = renderMermaid;
+        document.body.appendChild(script);
+    })();
 </script>
 
 

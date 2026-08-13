@@ -179,7 +179,6 @@
     <video controls preload="metadata" style="width: 100%; border-radius: 8px;">
   <source src="g1_moe_no_hand.mp4" type="video/mp4">
 </video>
-<p>项目目标是把已有的行走、上下台阶、跌倒恢复等能力融合到一个可部署的控制系统中，让机器人能在真实场景里根据身体状态自主选择合适技能，并在技能切换时保持动作连续、不过度抽搐、不因路由抖动导致任务失败。</p>
 <h2 id="项目背景">项目背景
 </h2><p>控制对象为 Unitree G1 23 DoF 机器人，部署侧控制周期为 0.02 s，策略输出为 23 维 raw action，经缩放转换为关节目标。项目中预训练了两个主要专家：</p>
 <ul>
@@ -490,8 +489,6 @@
     </section>
     
     <section class="powerby">
-        
-            customText <br/>
         使用 <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> 构建 <br />
         主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
     </section>
@@ -640,6 +637,43 @@
         });
     }
     initTocHide()
+</script>
+
+
+<script>
+    (function initMermaid() {
+        const codeBlocks = document.querySelectorAll('pre code.language-mermaid');
+        codeBlocks.forEach((block) => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'mermaid';
+            wrapper.textContent = block.textContent;
+            block.parentElement.replaceWith(wrapper);
+        });
+
+        const diagrams = document.querySelectorAll('.mermaid');
+        if (!diagrams.length) {
+            return;
+        }
+
+        function renderMermaid() {
+            mermaid.initialize({
+                startOnLoad: false,
+                securityLevel: 'strict',
+                theme: 'default'
+            });
+            mermaid.run({ nodes: diagrams });
+        }
+
+        if (window.mermaid) {
+            renderMermaid();
+            return;
+        }
+
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';
+        script.onload = renderMermaid;
+        document.body.appendChild(script);
+    })();
 </script>
 
 

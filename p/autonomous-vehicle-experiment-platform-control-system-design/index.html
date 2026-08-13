@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="面向多人开发和多算法切换的自动驾驶实验平台控制系统架构设计，包含控制器工厂、统一参数与模型管理、数据处理管道和强实时控制线程模型。">
+<title>自动驾驶车辆实验平台控制系统设计</title>
+
+<link rel='canonical' href='https://zouzhenshan.github.io/p/autonomous-vehicle-experiment-platform-control-system-design/'>
+
+<link rel="stylesheet" href="/scss/style.min.80dbf62ef43c0214823a0c5e456a86ea3529f480265468855ee2d3de09888b65.css"><meta property='og:title' content="自动驾驶车辆实验平台控制系统设计">
+<meta property='og:description' content="面向多人开发和多算法切换的自动驾驶实验平台控制系统架构设计，包含控制器工厂、统一参数与模型管理、数据处理管道和强实时控制线程模型。">
+<meta property='og:url' content='https://zouzhenshan.github.io/p/autonomous-vehicle-experiment-platform-control-system-design/'>
+<meta property='og:site_name' content='Z for 💤'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:published_time' content='2026-08-13T00:00:00&#43;00:00'/><meta property='article:modified_time' content='2026-08-13T00:00:00&#43;00:00'/>
+<meta name="twitter:title" content="自动驾驶车辆实验平台控制系统设计">
+<meta name="twitter:description" content="面向多人开发和多算法切换的自动驾驶实验平台控制系统架构设计，包含控制器工厂、统一参数与模型管理、数据处理管道和强实时控制线程模型。">
+    <link rel="shortcut icon" href="/favicon.ico" />
+
+  
+
+
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended">
+
+
+        <div id="article-toolbar" style="position: sticky;top: 5px;z-index: 1000;">
+            <a href="/" class="back-home">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-chevron-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="15 6 9 12 15 18" />
+</svg>
+
+
+
+                <span>返回</span>
+            </a>
+        </div>
+    
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#项目背景">项目背景</a></li>
+    <li><a href="#基于工厂设计模式的控制器架构">基于工厂设计模式的控制器架构</a></li>
+    <li><a href="#统一参数与模型管理服务">统一参数与模型管理服务</a></li>
+    <li><a href="#数据预处理与输出后处理接口">数据预处理与输出后处理接口</a></li>
+    <li><a href="#模板化编程边界">模板化编程边界</a></li>
+    <li><a href="#线程模型设计">线程模型设计</a></li>
+    <li><a href="#并发数据交换原则">并发数据交换原则</a></li>
+    <li><a href="#ros2-通信和-c-多线程边界">ROS2 通信和 C++ 多线程边界</a></li>
+    <li><a href="#控制周期流程">控制周期流程</a></li>
+    <li><a href="#小结">小结</a></li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/autonomous-vehicle/" >
+                Autonomous Vehicle
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/autonomous-vehicle-experiment-platform-control-system-design/">自动驾驶车辆实验平台控制系统设计</a>
+        </h2>
+    
+        
+        <h3 class="article-subtitle">
+            面向多人开发和多算法切换的自动驾驶实验平台控制系统架构设计，包含控制器工厂、统一参数与模型管理、数据处理管道和强实时控制线程模型。
+        </h3>
+        
+    </div>
+
+    
+    
+    
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">Aug 13, 2026</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+
+</header>
+
+    <section class="article-content">
+    
+    
+    <h2 id="项目背景">项目背景
+</h2><p>自动驾驶车辆实验平台的控制系统承担车辆状态接收、参考轨迹处理、控制律计算、执行器指令发布和实验数据记录等职责。在教学与科研场景中，平台通常需要支持多人并行开发。不同成员可能分别实现 PID、MPC、状态估计器、车辆模型、参考轨迹处理方法和方向盘后处理策略。若这些功能直接耦合在同一个控制节点内部，算法切换会导致大量重复修改，实验结果也难以保持可复现。</p>
+<p>本次控制系统架构设计的目标，是在保持 ROS2 topic 接口稳定的前提下，对控制器内部结构进行模块化重构。系统将车辆模型、状态估计、参考轨迹处理、横纵向控制、输出后处理、参数管理和数据记录划分为相对独立的功能单元，并通过统一接口和工厂机制完成对象创建。这样可以降低算法实现之间的耦合度，为多人协作、多模型切换和多控制算法对比实验提供稳定的软件结构。</p>
+<h2 id="基于工厂设计模式的控制器架构">基于工厂设计模式的控制器架构
+</h2><p>图 1 给出了控制系统的总体架构。系统按照数据在一次控制周期中的流向划分为 ROS 接口层、感知与前处理层、核心控制层、后处理层和工具辅助层。实线表示主数据流或控制流，虚线表示参数、模型辨识结果和辅助信息流。</p>
+<p><img src="/p/autonomous-vehicle-experiment-platform-control-system-design/%E6%9E%B6%E6%9E%84.png"
+	width="1448"
+	height="1086"
+	srcset="/p/autonomous-vehicle-experiment-platform-control-system-design/%E6%9E%B6%E6%9E%84_hud05dc38f7cfc3c2cf5549793bdd9aa63_1120770_480x0_resize_box_3.png 480w, /p/autonomous-vehicle-experiment-platform-control-system-design/%E6%9E%B6%E6%9E%84_hud05dc38f7cfc3c2cf5549793bdd9aa63_1120770_1024x0_resize_box_3.png 1024w"
+	loading="lazy"
+	
+		alt="控制系统总体架构"
+	
+	
+		class="gallery-image" 
+		data-flex-grow="133"
+		data-flex-basis="320px"
+	
+></p>
+<p>图 1 中，ROS 接口层负责接收 <code>gps</code>、<code>car_ori</code> 和 <code>local_plan</code> 等外部输入，并向执行端发布 <code>controller</code> 和 <code>prediction</code> 等输出。感知与前处理层由 <code>Estimator</code> 和 <code>ReferenceProcessor</code> 组成，前者将原始定位和姿态消息转换为当前车辆状态，后者将局部规划轨迹转换为控制器可使用的参考序列。核心控制层包含模板化车辆模型、纵向控制器和横向控制器。后处理层负责方向盘平滑、执行器饱和约束和前轮转角到方向盘转角的工程映射。工具辅助层提供参数管理、数据记录和参数辨识接口。</p>
+<p>控制器架构采用工厂设计模式。<code>ControllerNode</code> 在初始化阶段读取 launch 参数，并根据类型字符串调用相应工厂。车辆模型由 <code>VehicleModelFactory</code> 创建，估计器由 <code>EstimatorFactory</code> 创建，参考轨迹处理器由 <code>ReferenceProcessorFactory</code> 创建，横纵向控制器由 <code>ControllerFactory</code> 创建，后处理器链由 <code>PostProcessorFactory</code> 创建。节点只依赖抽象基类，不直接构造任何具体算法类。</p>
+<div class="mermaid">
+flowchart LR
+    Launch["launch 类型参数"] --> Node["ControllerNode"]
+    Yaml["yaml 参数文件"] --> Params["ParameterManager"]
+
+    Node --> VMF["VehicleModelFactory"]
+    Node --> EF["EstimatorFactory"]
+    Node --> RPF["ReferenceProcessorFactory"]
+    Node --> CF["ControllerFactory"]
+    Node --> PPF["PostProcessorFactory"]
+
+    Params --> VMF
+    Params --> EF
+    Params --> RPF
+    Params --> CF
+    Params --> PPF
+
+    VMF --> Model["VehicleModelBase"]
+    EF --> Estimator["EstimatorBase"]
+    RPF --> RefProc["ReferenceProcessorBase"]
+    CF --> Controller["ControllerBase"]
+    PPF --> PostProc["PostProcessorBase"]
+</div>
+<p>工厂模式在该系统中解决三个问题。第一，算法类型选择与算法对象构造分离，节点初始化逻辑不会随着新算法增多而持续膨胀。第二，所有实现都通过抽象基类暴露统一接口，控制主循环不需要感知 PID、MPC、EKF 或其他具体实现的内部差异。第三，模块替换可以通过 launch 参数完成，便于开展对比实验和回归验证。</p>
+<p>控制器基类的接口保持简洁。初始化阶段注入车辆模型和参数管理服务，运行阶段只接收统一的 <code>PipelineContext</code> 并输出 <code>ControlOutput</code>。由此，控制器不直接读取 ROS 消息，也不直接解析全局配置文件。输入契约、参数契约和算法实现被清晰分离。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">ControllerBase</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">virtual</span> <span class="o">~</span><span class="n">ControllerBase</span><span class="p">()</span> <span class="o">=</span> <span class="k">default</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">virtual</span> <span class="kt">bool</span> <span class="nf">initialize</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">VehicleModelBase</span><span class="o">&gt;</span> <span class="n">model</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                            <span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">ParameterManager</span><span class="o">&gt;</span> <span class="n">params</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">virtual</span> <span class="kt">bool</span> <span class="nf">compute</span><span class="p">(</span><span class="k">const</span> <span class="n">PipelineContext</span><span class="o">&amp;</span> <span class="n">ctx</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                         <span class="n">ControlOutput</span><span class="o">&amp;</span> <span class="n">out</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">virtual</span> <span class="kt">void</span> <span class="nf">getPrediction</span><span class="p">(</span><span class="n">Prediction</span><span class="o">&amp;</span><span class="p">)</span> <span class="k">const</span> <span class="p">{}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">virtual</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">controllerType</span><span class="p">()</span> <span class="k">const</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h2 id="统一参数与模型管理服务">统一参数与模型管理服务
+</h2><p>实验平台的配置可以分为类型选择和参数取值两类。类型选择用于确定本次运行启用哪些模块，例如车辆模型类型、估计器类型、参考处理器类型、横向控制器类型和纵向控制器类型。参数取值用于描述具体模块的内部参数，例如车辆轴距、转向角约束、PID 增益、MPC 权重、滤波系数和后处理限幅。</p>
+<p>系统将两类配置分层管理。launch 文件承担类型选择职责，yaml 文件承担参数描述职责。以横向控制器为例，launch 中的 <code>lateral_controller_type</code> 可以选择 <code>PID</code> 或 <code>MPC</code>，yaml 中则分别保留 <code>lateral_controllers.pid</code> 和 <code>lateral_controllers.mpc</code> 的参数节点。切换控制器时无需删除另一类控制器的参数，调参时也无需修改启动文件。</p>
+<p><code>ParameterManager</code> 作为统一参数管理服务，为所有模块提供一致的参数读取入口。每个模块按照自身命名前缀访问参数节点，工厂负责把同一个参数管理对象注入到模块内部。该设计可以避免参数散落在节点、控制器和工具函数中，也便于实验结束后记录完整配置，支撑结果复现。</p>
+<p>车辆模型采用统一管理与依赖注入方式。系统通过 <code>VehicleModelFactory</code> 创建 <code>VehicleModelBase</code> 实例，再将该模型注入估计器和控制器。状态估计器可使用车辆模型进行时延补偿，MPC 可使用同一模型构造预测约束，误差计算也可与模型定义保持一致。车辆模型只有一个来源，可以避免不同模块内部各自硬编码模型方程导致的行为不一致。</p>
+<p>模板化编程进一步解决了数值类型复用问题。普通仿真、状态估计和时延补偿通常使用 <code>double</code> 类型，MPC 中的自动微分则需要 <code>CppAD::AD&lt;double&gt;</code> 类型。如果车辆模型只提供普通数值接口，MPC 每切换一次模型都需要重新实现预测方程。这里通过 CRTP 适配器要求派生模型只实现一份 <code>stepImpl&lt;T&gt;</code>，框架自动向上提供 double 与 AD 两套入口。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">template</span> <span class="o">&lt;</span><span class="k">typename</span> <span class="n">Derived</span><span class="o">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">TemplatedVehicleModel</span> <span class="o">:</span> <span class="k">public</span> <span class="n">VehicleModelBase</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">State</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;</span> <span class="n">step</span><span class="p">(</span><span class="k">const</span> <span class="n">State</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;&amp;</span> <span class="n">s</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                       <span class="k">const</span> <span class="n">Input</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;&amp;</span> <span class="n">u</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                       <span class="kt">double</span> <span class="n">dt</span><span class="p">)</span> <span class="k">const</span> <span class="k">final</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="k">const</span> <span class="n">Derived</span><span class="o">*&gt;</span><span class="p">(</span><span class="k">this</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">            <span class="o">-&gt;</span><span class="k">template</span> <span class="n">stepImpl</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">dt</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">State</span><span class="o">&lt;</span><span class="n">CppAD</span><span class="o">::</span><span class="n">AD</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;&gt;</span> <span class="n">step</span><span class="p">(</span><span class="k">const</span> <span class="n">State</span><span class="o">&lt;</span><span class="n">CppAD</span><span class="o">::</span><span class="n">AD</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;&gt;&amp;</span> <span class="n">s</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                                  <span class="k">const</span> <span class="n">Input</span><span class="o">&lt;</span><span class="n">CppAD</span><span class="o">::</span><span class="n">AD</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;&gt;&amp;</span> <span class="n">u</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                                  <span class="kt">double</span> <span class="n">dt</span><span class="p">)</span> <span class="k">const</span> <span class="k">final</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">using</span> <span class="n">AD</span> <span class="o">=</span> <span class="n">CppAD</span><span class="o">::</span><span class="n">AD</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="k">const</span> <span class="n">Derived</span><span class="o">*&gt;</span><span class="p">(</span><span class="k">this</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">            <span class="o">-&gt;</span><span class="k">template</span> <span class="n">stepImpl</span><span class="o">&lt;</span><span class="n">AD</span><span class="o">&gt;</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">dt</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>在教学实验中，学生实现一个运动学单车模型后，PID、MPC、EKF 和时延补偿模块均可复用该模型。后续若引入动力学单车模型，也只需在同一抽象接口下扩展模型实现。系统把模型差异限制在模型类内部，控制器和估计器通过统一接口获得模型能力。</p>
+<h2 id="数据预处理与输出后处理接口">数据预处理与输出后处理接口
+</h2><p>控制器输入应当具有统一格式。原始 GPS、车身姿态和局部规划消息到达时间不同，噪声水平不同，坐标语义也不同。若每个控制算法自行完成滤波、最近点搜索、时延补偿和参考轨迹重采样，将产生大量重复代码，并使不同算法的输入条件难以比较。</p>
+<p>预处理层提供两个主要接口。<code>EstimatorBase</code> 将传感器消息转换为当前车辆状态，可实现直通估计、低通滤波或 EKF。<code>ReferenceProcessorBase</code> 将局部规划轨迹转换为控制器可直接使用的参考序列，可实现固定预瞄、时间配准、弧长插值和样条重采样。处理完成后，系统将车辆状态、参考序列和误差状态封装为统一的 <code>PipelineContext</code>。</p>
+<div class="mermaid">
+flowchart LR
+    Raw["原始传感器和规划消息"] --> Est["EstimatorBase"]
+    Est --> State["CarState"]
+    Raw --> Ref["ReferenceProcessorBase"]
+    State --> Ref
+    Ref --> Reference["Reference horizon"]
+    State --> Model["VehicleModelBase"]
+    Reference --> Model
+    Model --> Error["ErrorState"]
+    State --> Context["PipelineContext"]
+    Reference --> Context
+    Error --> Context
+</div>
+<p>图 2 描述了预处理层的数据组织过程。原始消息先进入状态估计器和参考处理器，车辆模型随后根据状态与参考序列计算误差状态，三类数据最终合并为控制器输入上下文。</p>
+<p>控制器输出的前轮转角和加速度仍需经过后处理才能形成执行命令。方向盘存在最大转速限制，执行器存在饱和约束，前轮转角与方向盘转角之间还存在传动比映射。若这些工程约束直接写入 PID 或 MPC 内部，算法代码会承担额外职责，不同控制器之间的执行边界也难以保持一致。</p>
+<p>后处理层采用顺序处理链实现。典型顺序是先进行方向盘变化率限制，再进行低通平滑，最后执行饱和约束和物理量映射。</p>
+<div class="mermaid">
+flowchart LR
+    U0["ControlOutput 原始控制量"] --> R["RateLimitSmoother"]
+    R --> L["LowPassSmoother"]
+    L --> S["ActuatorSaturator"]
+    S --> Cmd["ROS2 控制命令"]
+</div>
+<p>图 3 给出了后处理链的基本结构。方向盘防抖、限幅和映射具有明确先后关系，也具有较强组合性，因此适合用顺序链组织。系统其他主要阶段保持固定顺序，后处理层作为局部可组合结构保留一定扩展空间。</p>
+<h2 id="模板化编程边界">模板化编程边界
+</h2><p>多人开发要求软件边界稳定。模板化编程解决车辆模型在不同数值类型下复用的问题，工厂机制解决运行时模块选择的问题，统一上下文解决模块间数据交换的问题。三者共同构成控制系统的扩展边界。</p>
+<p>在该边界下，新增算法不需要修改主循环。</p>
+<p>编写新车辆模型时，开发者继承 <code>TemplatedVehicleModel</code>，实现模型推进、横纵向解耦状态更新和误差计算。编写新控制器时，开发者继承 <code>ControllerBase</code>，从 <code>PipelineContext</code> 中读取状态、误差和参考序列。编写新滤波器时，开发者继承 <code>EstimatorBase</code>，输出标准 <code>CarState</code>。编写新后处理器时，开发者继承 <code>PostProcessorBase</code>，接收并修改 <code>ControlOutput</code>。</p>
+<p>主循环只依赖抽象基类和上下文对象。多人并行开发时，MPC 权重调整、EKF 实现、方向盘平滑策略和车辆模型扩展都落在同一套数据契约之上。该结构能够降低合并冲突，也能使实验对比更加可控。</p>
+<h2 id="线程模型设计">线程模型设计
+</h2><p>控制系统的运行时结构需要同时处理异步通信和周期性控制。GPS、IMU、局部规划和参数事件具有异步到达特征，控制回路则要求稳定周期和确定的执行时序。若将 ROS2 回调与控制计算绑定在同一线程中，任意一个耗时回调都可能造成控制周期抖动。</p>
+<p>本文将线程模型划分为 ROS2 异步网络层、状态管理层和强实时控制回路三部分。</p>
+<div class="mermaid">
+flowchart TB
+    subgraph Async["ROS2 异步网络层"]
+        Exec["MultiThreadedExecutor"]
+        GpsCb["GPS callback"]
+        OriCb["姿态 callback"]
+        PlanCb["局部规划 callback"]
+        ParamCb["参数事件 callback"]
+    end
+
+    subgraph StateLayer["状态管理层"]
+        Buffer["输入消息缓存"]
+        Snapshot["只读状态快照"]
+        ParamStore["参数快照"]
+    end
+
+    subgraph RtLoop["强实时控制回路"]
+        Timer["固定周期控制线程"]
+        Pre["预处理管道"]
+        Ctrl["横纵向控制器"]
+        Post["后处理管道"]
+        Pub["发布控制命令"]
+    end
+
+    Exec --> GpsCb --> Buffer
+    Exec --> OriCb --> Buffer
+    Exec --> PlanCb --> Buffer
+    Exec --> ParamCb --> ParamStore
+    Buffer --> Snapshot
+    ParamStore --> Snapshot
+    Snapshot --> Timer --> Pre --> Ctrl --> Post --> Pub
+</div>
+<p>图 4 描述了控制系统的线程模型。ROS2 异步网络层负责接收外部消息，状态管理层负责维护最新输入缓存和只读快照，强实时控制回路按固定周期读取快照并完成控制计算。</p>
+<p>ROS2 异步网络层由 <code>rclcpp::executors::MultiThreadedExecutor</code> 承担。不同订阅回调被划分到合适的 callback group 中，GPS、姿态和局部规划消息可以并发进入。回调函数只进行轻量处理，包括时间戳校验、消息复制和缓存更新。MPC 求解、样条重采样等耗时计算不在回调线程中执行。</p>
+<p>状态管理层负责将异步输入整理为控制线程可读取的快照。基础实现可以使用互斥锁保护输入缓存。控制线程在每个周期开始时短暂加锁，将最新 GPS、姿态、规划和参数版本复制到本地 <code>Snapshot</code>，复制完成后立即释放锁。后续预处理和控制计算均在本地快照上执行，避免长时间占用共享锁。</p>
+<p>强实时控制回路由固定周期线程或 ROS2 wall timer 驱动。周期开始时读取快照，随后依次运行预处理、横纵向控制、后处理和命令发布。该线程不等待新的 ROS 消息，也不执行复杂参数解析。当某类消息超时，控制线程依据状态机进入降级策略，例如保持上一周期安全命令、限速停车或输出诊断信息。</p>
+<h2 id="并发数据交换原则">并发数据交换原则
+</h2><p>并发数据交换的基本原则是缩短共享数据的持锁时间。ROS2 回调线程写入最新消息缓存，控制线程在周期入口读取快照。锁只保护数据交换，不保护算法运行。MPC 求解、样条重采样和 EKF 更新等耗时操作均在本地数据上执行。</p>
+<div class="mermaid">
+sequenceDiagram
+    participant RosThread as ROS2 callback thread
+    participant Buf as SharedInputBuffer
+    participant CtrlThread as Control loop thread
+    participant Local as LocalSnapshot
+
+    RosThread->>Buf: write latest message
+    Buf-->>RosThread: return
+    CtrlThread->>Buf: copy latest inputs
+    Buf-->>CtrlThread: return snapshot
+    CtrlThread->>Local: run local algorithms
+    CtrlThread->>RosThread: publish command
+</div>
+<p>图 5 给出了共享缓存与控制快照之间的交换时序。回调线程只负责写入最新消息，控制线程只在周期入口复制输入，算法运行阶段不再访问共享缓存。</p>
+<p>当实时性要求进一步提高时，互斥锁方案可以演进为双缓冲或原子 <code>shared_ptr</code> 快照。网络线程构造新的不可变快照，并通过原子指针交换发布。控制线程每个周期只读取当前快照指针，避免阻塞回调线程。教学实验平台可以先采用互斥锁和短拷贝实现，在日志证明锁竞争影响控制周期后，再升级为双缓冲方案。</p>
+<p>参数更新也应通过快照机制进入控制线程。运行过程中直接修改控制器内部对象存在风险，尤其是 MPC horizon、约束维度、模型类型等会改变对象结构的参数。增益、限幅和滤波系数可以在周期边界更新。模型类型、控制器类型和后处理链顺序属于结构参数，适合通过节点重新初始化完成切换。</p>
+<h2 id="ros2-通信和-c-多线程边界">ROS2 通信和 C++ 多线程边界
+</h2><p>ROS2 executor 的职责是调度 callback。订阅、timer、service 和参数事件均可成为回调来源。<code>MultiThreadedExecutor</code> 允许多个回调并发执行，但并发执行不能自动保证实时性。若某个 callback 持锁时间过长，或在 callback 中调用耗时算法，其他消息处理仍会受到影响。</p>
+<p>控制系统可以将 callback group 分为传感器订阅组、参数服务组和控制 timer 组。传感器订阅组采用可重入策略，使 GPS 与姿态消息能够并发进入。参数服务组采用互斥策略，避免同时处理多个参数更新。控制 timer 单独成组，必要时可配合操作系统线程优先级设置，提高控制周期的调度确定性。线程数量本身不是目标，明确区分不同性质的工作才是线程划分的主要目的。</p>
+<p>C++ 多线程实现需要遵守以下约束。</p>
+<ul>
+<li>回调线程只写最新消息缓存，不持有控制器对象。</li>
+<li>控制线程只在周期入口复制共享数据，算法运行期间只读本地快照。</li>
+<li>发布命令只发生在控制线程末尾，避免多个线程同时写控制输出。</li>
+<li>参数更新先进入参数缓存，控制线程在周期边界应用轻量参数。</li>
+<li>所有跨线程对象都要有明确所有权，优先使用不可变快照和 <code>shared_ptr&lt;const T&gt;</code>。</li>
+</ul>
+<p>这些约束可以提升运行时可调试性。当控制周期出现抖动时，可以分别检查 ROS2 executor 是否出现回调堆积、状态快照是否存在延迟、控制求解是否超时。问题被限制在明确的层次内，便于定位和验证。</p>
+<h2 id="控制周期流程">控制周期流程
+</h2><p>控制线程每个周期执行以下步骤。</p>
+<ol>
+<li>读取当前时间。</li>
+<li>从状态管理层复制最新输入快照。</li>
+<li>检查 GPS、姿态和局部规划是否超时。</li>
+<li>调用 <code>PerceptionPipeline</code> 生成 <code>PipelineContext</code>。</li>
+<li>横向和纵向控制器分别计算控制量。</li>
+<li>调用 <code>PostControlPipeline</code> 做平滑、限幅和映射。</li>
+<li>发布控制命令和可选预测轨迹。</li>
+<li>记录本周期耗时、输入时间戳和输出命令。</li>
+</ol>
+<p>后续可以补充超时分支、降级策略和诊断输出，使其成为完整的实时控制流程图。</p>
+<h2 id="小结">小结
+</h2><p>本文设计的控制系统将节点、模型、参数、算法和线程边界分离。<code>ControllerNode</code> 保留 ROS2 接口职责，工厂负责模块创建，参数管理服务负责统一配置读取，车辆模型作为共享依赖注入估计器和控制器，预处理与后处理管道分别承担输入标准化和执行命令约束。</p>
+<p>线程模型同样采用分层思想。异步网络层负责消息接收，状态管理层负责快照生成，强实时控制回路只在周期入口读取数据，并在本地完成一次完整控制计算。该设计能够支持多人开发、多算法频繁切换和可复现实验，也为后续引入更复杂的车辆模型、估计器和优化控制器保留扩展空间。</p>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    </footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+</article>
+
+    
+
+    
+
+     
+    
+        
+    <div class="disqus-container">
+    <div id="disqus_thread"></div>
+<script>
+    window.disqus_config = function () {
+    
+    
+    
+    };
+    (function() {
+        if (["localhost", "127.0.0.1"].indexOf(window.location.hostname) != -1) {
+            document.getElementById('disqus_thread').innerHTML = 'Disqus comments not available by default when the website is previewed locally.';
+            return;
+        }
+        var d = document, s = d.createElement('script'); s.async = true;
+        s.src = '//' + "hugo-theme-stack" + '.disqus.com/embed.js';
+        s.setAttribute('data-timestamp', +new Date());
+        (d.head || d.body).appendChild(s);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="https://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="https://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</div>
+
+<style>
+    .disqus-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+    }
+</style>
+
+<script>
+    window.addEventListener('onColorSchemeChange', (e) => {
+        if (typeof DISQUS == 'object') {
+            DISQUS.reset({
+                reload: true
+            });
+        }
+    })
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2025 - 
+        
+        2026 zzs
+    </section>
+    
+    <section class="powerby">
+        使用 <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> 构建 <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+<style>
+    #TableOfContents > ul, ol {
+        ul, ol {
+            display: none;
+        }
+        .open {
+            display: block;
+        }
+    }
+</style>
+
+<script>
+    function initTocHide() {
+        
+        let toc = document.querySelector(".widget--toc");
+        if (!toc) {
+            return;
+        }
+        
+        window.addEventListener('scroll', function() {
+            
+            let openUl = document.querySelectorAll(".open");
+            if (openUl.length > 0) {
+              openUl.forEach((ul) => {
+                ul.classList.remove("open")
+              })
+            }
+            
+            let currentLi = document.querySelector(".active-class");
+            if (!currentLi) {
+                return
+            }
+            
+            if (currentLi.children.length > 1) {
+                currentLi.children[1].classList.add("open")
+            }
+            
+            let ul = currentLi.parentElement;
+            do {
+                ul.classList.add("open");
+                ul = ul.parentElement.parentElement
+            } while (ul !== undefined && (ul.localName === 'ul' || ul.localName === 'ol'))
+        });
+    }
+    initTocHide()
+</script>
+
+
+<script>
+    (function initMermaid() {
+        const codeBlocks = document.querySelectorAll('pre code.language-mermaid');
+        codeBlocks.forEach((block) => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'mermaid';
+            wrapper.textContent = block.textContent;
+            block.parentElement.replaceWith(wrapper);
+        });
+
+        const diagrams = document.querySelectorAll('.mermaid');
+        if (!diagrams.length) {
+            return;
+        }
+
+        function renderMermaid() {
+            mermaid.initialize({
+                startOnLoad: false,
+                securityLevel: 'strict',
+                theme: 'default'
+            });
+            mermaid.run({ nodes: diagrams });
+        }
+
+        if (window.mermaid) {
+            renderMermaid();
+            return;
+        }
+
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';
+        script.onload = renderMermaid;
+        document.body.appendChild(script);
+    })();
+</script>
+
+
+<style>
+    #backTopBtn {
+        display: none;
+        position: fixed;
+        bottom: 30px;
+        z-index: 99;
+        cursor: pointer;
+        width: 36px;
+        height: 36px;
+        color: var(--body-text-color);
+    }
+</style>
+
+<script>
+    
+
+    function initScrollTop() {
+        let rightSideBar = document.querySelector(".right-sidebar");
+        if (!rightSideBar) {
+            return;
+        }
+        
+        let btn = document.createElement("div");
+        btn.id = "backTopBtn";
+        btn.onclick = backToTop;
+        btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" width="36" height="36" stroke-width="1.75"> <path d="M16 12l-4 -4l-4 4"></path> <path d="M12 16v-8"></path> <path d="M12 3c7.2 0 9 1.8 9 9s-1.8 9 -9 9s-9 -1.8 -9 -9s1.8 -9 9 -9z"></path> </svg>`;
+        rightSideBar.appendChild(btn);
+        
+        window.onscroll = function() {
+            
+            if (document.body.scrollTop > 20 || document.documentElement.scrollTop > 20) {
+                btn.style.display = "block";
+            } else {
+                btn.style.display = "none";
+            }
+        };
+    }
+
+    
+
+    function backToTop(){
+        window.scrollTo({ top: 0, behavior: "smooth" })
+    }
+
+    initScrollTop();
+</script>
+
+    </body>
+</html>

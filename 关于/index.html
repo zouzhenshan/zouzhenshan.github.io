@@ -376,8 +376,6 @@
     </section>
     
     <section class="powerby">
-        
-            customText <br/>
         使用 <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> 构建 <br />
         主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
     </section>
@@ -526,6 +524,43 @@
         });
     }
     initTocHide()
+</script>
+
+
+<script>
+    (function initMermaid() {
+        const codeBlocks = document.querySelectorAll('pre code.language-mermaid');
+        codeBlocks.forEach((block) => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'mermaid';
+            wrapper.textContent = block.textContent;
+            block.parentElement.replaceWith(wrapper);
+        });
+
+        const diagrams = document.querySelectorAll('.mermaid');
+        if (!diagrams.length) {
+            return;
+        }
+
+        function renderMermaid() {
+            mermaid.initialize({
+                startOnLoad: false,
+                securityLevel: 'strict',
+                theme: 'default'
+            });
+            mermaid.run({ nodes: diagrams });
+        }
+
+        if (window.mermaid) {
+            renderMermaid();
+            return;
+        }
+
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';
+        script.onload = renderMermaid;
+        document.body.appendChild(script);
+    })();
 </script>
 
 

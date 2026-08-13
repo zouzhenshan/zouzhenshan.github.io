@@ -10,7 +10,7 @@
 <meta property='og:description' content="人生如畫冊 我有我的浪漫手法">
 <meta property='og:url' content='https://zouzhenshan.github.io/post/'>
 <meta property='og:site_name' content='Z for 💤'>
-<meta property='og:type' content='website'><meta property='og:updated_time' content=' 2026-08-12T00:00:00&#43;00:00 '/>
+<meta property='og:type' content='website'><meta property='og:updated_time' content=' 2026-08-13T00:00:00&#43;00:00 '/>
 <meta name="twitter:title" content="Posts">
 <meta name="twitter:description" content="人生如畫冊 我有我的浪漫手法"><link rel="alternate" type="application/rss&#43;xml" href="https://zouzhenshan.github.io/post/index.xml">
     <link rel="shortcut icon" href="/favicon.ico" />
@@ -271,15 +271,7 @@
                     <a href="/archives/#2026">
                         
                             <span class="year">2026</span>
-                            <span class="count">1</span>
-                        
-                    </a> 
-                </div>
-            <div class="archives-year">
-                    <a href="/archives/#2025">
-                        
-                            <span class="year">2025</span>
-                            <span class="count">1</span>
+                            <span class="count">2</span>
                         
                     </a> 
                 </div>
@@ -306,8 +298,8 @@
 
     <div class="tagCloud-tags">
         
-            <a href="/categories/c&#43;&#43;/" class="font_size_1">
-                C&#43;&#43;
+            <a href="/categories/autonomous-vehicle/" class="font_size_1">
+                Autonomous Vehicle
             </a>
         
             <a href="/categories/reinforcement-learning/" class="font_size_1">
@@ -346,6 +338,17 @@
     <section class="article-list--compact">
         
             <article>
+    <a href="/p/autonomous-vehicle-experiment-platform-control-system-design/">
+        <div class="article-details">
+            <h2 class="article-title">自动驾驶车辆实验平台控制系统设计</h2>
+            <footer class="article-time">
+                <time datetime='2026-08-13T00:00:00Z'>Aug 13, 2026</time>
+            </footer>
+        </div>
+    </a>
+</article>
+        
+            <article>
     <a href="/p/unitree-g1-amp-moe-multiskill/">
         <div class="article-details">
             <h2 class="article-title">Unitree G1 人形机器人 AMP-MoE 多技能运动控制</h2>
@@ -353,26 +356,6 @@
                 <time datetime='2026-08-12T00:00:00Z'>Aug 12, 2026</time>
             </footer>
         </div>
-    </a>
-</article>
-        
-            <article>
-    <a href="/p/acm_io_cpp/">
-        <div class="article-details">
-            <h2 class="article-title">ACM模式常用输入输出写法（C&#43;&#43;）</h2>
-            <footer class="article-time">
-                <time datetime='2025-04-13T00:00:00Z'>Apr 13, 2025</time>
-            </footer>
-        </div>
-            <div class="article-image">
-                <img src="/p/acm_io_cpp/ACM_IO_CPP_huf2d1a32235e2c5a88611ab175bc9ce3a_165613_120x120_fill_box_smart1_3.png" 
-                        width="120"
-                        height="120" 
-                        alt="ACM模式常用输入输出写法（C&#43;&#43;）"
-                        loading="lazy">
-                
-            </div>
-        
     </a>
 </article>
         
@@ -387,8 +370,6 @@
     </section>
     
     <section class="powerby">
-        
-            customText <br/>
         使用 <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> 构建 <br />
         主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
     </section>
@@ -459,6 +440,43 @@
         });
     }
     initTocHide()
+</script>
+
+
+<script>
+    (function initMermaid() {
+        const codeBlocks = document.querySelectorAll('pre code.language-mermaid');
+        codeBlocks.forEach((block) => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'mermaid';
+            wrapper.textContent = block.textContent;
+            block.parentElement.replaceWith(wrapper);
+        });
+
+        const diagrams = document.querySelectorAll('.mermaid');
+        if (!diagrams.length) {
+            return;
+        }
+
+        function renderMermaid() {
+            mermaid.initialize({
+                startOnLoad: false,
+                securityLevel: 'strict',
+                theme: 'default'
+            });
+            mermaid.run({ nodes: diagrams });
+        }
+
+        if (window.mermaid) {
+            renderMermaid();
+            return;
+        }
+
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';
+        script.onload = renderMermaid;
+        document.body.appendChild(script);
+    })();
 </script>
 
 

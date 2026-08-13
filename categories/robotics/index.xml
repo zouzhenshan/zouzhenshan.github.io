@@ -16,7 +16,6 @@
         <description>&lt;video controls preload=&#34;metadata&#34; style=&#34;width: 100%; border-radius: 8px;&#34;&gt;
   &lt;source src=&#34;g1_moe_no_hand.mp4&#34; type=&#34;video/mp4&#34;&gt;
 &lt;/video&gt;
-&lt;p&gt;项目目标是把已有的行走、上下台阶、跌倒恢复等能力融合到一个可部署的控制系统中，让机器人能在真实场景里根据身体状态自主选择合适技能，并在技能切换时保持动作连续、不过度抽搐、不因路由抖动导致任务失败。&lt;/p&gt;
 &lt;h2 id=&#34;项目背景&#34;&gt;项目背景
 &lt;/h2&gt;&lt;p&gt;控制对象为 Unitree G1 23 DoF 机器人，部署侧控制周期为 0.02 s，策略输出为 23 维 raw action，经缩放转换为关节目标。项目中预训练了两个主要专家：&lt;/p&gt;
 &lt;ul&gt;

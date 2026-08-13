@@ -290,6 +290,982 @@ $$\delta_{ss}=\kappa(L+\frac{mv_x^2}{L}(\frac{l_r}{C_f}-\frac{l_f}{C_r}))$$
 </description>
         </item>
         <item>
+        <title>车辆转向补偿方法</title>
+        <link>https://zouzhenshan.github.io/p/steering-compensation-method/</link>
+        <pubDate>Thu, 13 Aug 2026 00:00:00 +0000</pubDate>
+        
+        <guid>https://zouzhenshan.github.io/p/steering-compensation-method/</guid>
+        <description>&lt;h1 id=&#34;一阶惯性环节补偿&#34;&gt;一阶惯性环节补偿
+&lt;/h1&gt;$$\dot\delta(t) = -\frac{\delta(t)}{\tau_s} + \frac{\delta_d(t)}{\tau_s}$$
+&lt;p&gt;
+其中，$\delta(t)$ 是实际方向盘转角，$\delta_d$ 是期望方向盘转角（输入方向盘转角）。&lt;/p&gt;
+&lt;h2 id=&#34;数据采集&#34;&gt;数据采集
+&lt;/h2&gt;&lt;p&gt;输入信号：车载 Orin 发送给转向执行器的方向盘转角指令。&lt;/p&gt;
+&lt;p&gt;输出信号：底盘 CAN 总线反馈的实际方向盘转角。&lt;/p&gt;
+&lt;p&gt;实验工况：至少要有稳态工况：匀速直线行驶、固定方向盘转角下的转向响应。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;Note&lt;/p&gt;
+&lt;p&gt;实际上，应当设计不同工况下覆盖更多系统频带范围的激励信号。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;数据滤波：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;预处理：CAN总线的信号发送不是严格周期的。因此，在应用滤波器之前，需要重采样，将不规则的时间序列转换为规则的时间序列。&lt;/li&gt;
+&lt;li&gt;设置定义滤波器参数：采样频率与上一步重采样的频率一致。方向盘的人为/执行器操作频率一般在10Hz，可以设置一个截止频率，比如15Hz，来滤掉更高频的电气噪声。滤波器阶数越高，过渡带越窄（好），但可能引入振荡。&lt;/li&gt;
+&lt;li&gt;应用零相位巴特沃斯滤波器。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;细节：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;确定足够高的采样频率以避免信号失真。&lt;/li&gt;
+&lt;li&gt;确保时间同步，对输入信号输出信号时间戳进行对齐、插值等处理。&lt;/li&gt;
+&lt;li&gt;若存在纯滞后 $\tau_d$​，需在模型中加入延迟项 $\delta_d(t-\tau_d)$。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;参数辨识&#34;&gt;参数辨识
+&lt;/h2&gt;&lt;h3 id=&#34;最小二乘法&#34;&gt;最小二乘法
+&lt;/h3&gt;&lt;p&gt;离散化差分方程：
+&lt;/p&gt;
+$$
+\delta(k) = a \cdot \delta(k-1) + b \cdot \delta_d(k-1)
+$$
+&lt;p&gt;参数转换关系：
+&lt;/p&gt;
+$$
+a = 1 - \frac{\Delta t}{\tau_s}, \quad b = \frac{\Delta t}{\tau_s}, \quad \tau_s = \frac{\Delta t}{1 - a}
+$$
+&lt;p&gt;最小二乘法回归矩阵：
+&lt;/p&gt;
+$$
+\Phi = \begin{bmatrix}
+\delta(0) &amp; \delta_d(0) \\
+\delta(1) &amp; \delta_d(1) \\
+\vdots &amp; \vdots \\
+\delta(N-1) &amp; \delta_d(N-1)
+\end{bmatrix}, \quad
+Y = \begin{bmatrix}
+\delta(1) \\
+\delta(2) \\
+\vdots \\
+\delta(N)
+\end{bmatrix}
+$$
+&lt;p&gt;参数估计公式：
+&lt;/p&gt;
+$$
+\theta = \begin{bmatrix} a \\ b \end{bmatrix} = (\Phi^T \Phi)^{-1} \Phi^T Y
+$$
+&lt;p&gt;计算时间常数：
+&lt;/p&gt;
+$$
+\tau_s = \frac{\Delta t}{1 - a^*}
+$$
+&lt;h2 id=&#34;补偿策略&#34;&gt;补偿策略
+&lt;/h2&gt;&lt;p&gt;为避免控制系统输出抖动，不建议在每个控制周期都进行实时最小二乘辨识来更新滞后时间常数。时间常数 $\tau_s$ 虽然是时变的，但它主要受少数几个可测量的、变化相对缓慢的变量影响，最典型的就是车速。可以通过不同的实验工况辨识出时间常数与速度、方向盘执行开度之间的关系，并存成三维表。在每个控制周期，根据当前车速和控制算法计算得出的参考转角通过线性插值查表的方法进行补偿。&lt;/p&gt;
+&lt;h1 id=&#34;apollo-mrac-源码学习&#34;&gt;Apollo MRAC 源码学习
+&lt;/h1&gt;&lt;h2 id=&#34;什么是-mrac-控制器&#34;&gt;什么是 MRAC 控制器
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;控制器同时接收外部指令 $r$（例如，MPC 控制器计算出的期望方向盘转角）和实际系统的反馈（实际方向盘转角）$y_p$。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;指令 $r$ 也被输入到&lt;strong&gt;参考模型&lt;/strong&gt;中，得到一个理想的输出 $y_m$。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;自适应律&lt;/strong&gt;会持续比较实际输出 $y_p$ 和理想输出 $y_m$ 之间的误差 $e = y_p - y_m$&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;根据这个误差 $e$，自适应律会实时地、在线地调整&lt;strong&gt;反馈控制器&lt;/strong&gt;中的增益参数，目的是让误差 $e$ 趋近于零。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;当误差 $e$ 趋近于零时，就意味着实际系统 $y_p$ 的行为已经和理想的参考模型 $y_m$ 一模一样了。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;为什么要设计-mrac-控制器&#34;&gt;为什么要设计 MRAC 控制器
+&lt;/h2&gt;&lt;p&gt;为了让同一套上层控制算法（MPC 等）在面对不同的真实转向机时，不受硬件参数差异的影响。比如现在有两台车，一台是博世的转向机，一台是国产转向机，两台转向机的阻尼比等系数都不同，如果设计一个期望的转向机参考模型，并用MRAC算法控制的话，那么这两台建模不同的转向机都会变成我设计的期望转向机的模型。这就是模型参考的意义。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;Note&lt;/p&gt;
+&lt;p&gt;设计的期望转向机的模型对信号的收敛速度应该是要低于真实转向机的。因为要使一个收敛快的转向机变得收敛慢是容易实现的，但要使一个收敛慢的转向机变得收敛快，往往难以克服机械硬件的限制。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;（一点个人猜测：使极端场景下转向可控，比如禁止超调。）&lt;/p&gt;
+&lt;h2 id=&#34;算法设计流程&#34;&gt;算法设计流程
+&lt;/h2&gt;&lt;h3 id=&#34;系统建模&#34;&gt;系统建模
+&lt;/h3&gt;&lt;p&gt;假设实际车辆转向系统的动态可表示为：
+&lt;/p&gt;
+$$\dot{x} = A x + B u$$
+&lt;p&gt;而参考模型的动态为：
+&lt;/p&gt;
+$$\dot{x}_r = A_r x_r + B_r u_d$$
+&lt;p&gt;如果存在理想增益 $K_x^&lt;em&gt;$ 和 $K_u^&lt;/em&gt;$，使得：
+&lt;/p&gt;
+$$A + B K_x^{*T} = A_r \quad \text{且} \quad B K_u^* = B_r$$
+&lt;p&gt;那么将控制律$u = K_x^{&lt;em&gt;T} x + K_u^&lt;/em&gt; u_d$代入实际系统，可得：
+&lt;/p&gt;
+$$\dot{x} = A x + B(K_x^{*T} x + K_u^* u_d) = (A + B K_x^{*T})x + B K_u^* u_d = A_r x + B_r u_d$$
+&lt;p&gt;这表明当增益达到理想值时，实际系统与参考模型完全一致，状态自然会收敛。&lt;/p&gt;
+&lt;p&gt;在MRAC控制器中，$u_d$ 代表上级控制器计算出的期望转向角度。$u$ 代表实际控制命令，在代码中通过&lt;code&gt;control_unbounded = gain_state_adaption_.col(0).transpose() * state_action_.col(0) + gain_input_adaption_(0, 0) * input_desired_(0, 0);&lt;/code&gt;计算，是MRAC控制器最终输出给执行器的实际控制信号。&lt;/p&gt;
+&lt;p&gt;Apollo MRAC采用的自适应律（离散时间形式）：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;3
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;4
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;n&#34;&gt;law_adp&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;col&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;law_adp&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;col&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;1&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;-&lt;/span&gt; &lt;span class=&#34;mf&#34;&gt;0.5&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;*&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;ts_&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;*&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;gain_adp&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;*&lt;/span&gt; 
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;state_adp&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;col&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;*&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;state_error&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;col&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;).&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;transpose&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;()&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;+&lt;/span&gt; 
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;n&#34;&gt;compensation_anti_windup_&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;col&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;).&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;transpose&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;())&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;+&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;...)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;*&lt;/span&gt; 
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;n&#34;&gt;matrix_p_adaption_&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;*&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;matrix_b_adaption_&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;对应的连续时间自适应律为：
+&lt;/p&gt;
+$$\dot{K}_x = -\Gamma_x x e^T P B$$
+$$\dot{K}_u = -\Gamma_u u_d e^T P B$$
+&lt;p&gt;其中：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;$e = x - x_r$ 是状态误差&lt;/li&gt;
+&lt;li&gt;$P$ 是Lyapunov方程$A_r^T P + P A_r = -Q$的正定解&lt;/li&gt;
+&lt;li&gt;$\Gamma_x, \Gamma_u$ 是自适应增益参数，控制着自适应律的更新速度&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;稳定性分析&#34;&gt;稳定性分析：
+&lt;/h3&gt;&lt;ol&gt;
+&lt;li&gt;定义增益误差：$\tilde{K}_x = K_x - K_x^&lt;em&gt;$，$\tilde{K}_u = K_u - K_u^&lt;/em&gt;$&lt;/li&gt;
+&lt;li&gt;状态误差动态：$\dot{e} = A_r e + B(\tilde{K}_x^T x + \tilde{K}_u u_d)$&lt;/li&gt;
+&lt;li&gt;通过上述自适应律，可以证明误差系统是稳定的，且$\lim_{t \to \infty} e(t) = 0$&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;具体来说，当$e \neq 0$时，自适应律会调整 $K_x$ 和 $K_u$，使它们向理想值 $K_x^&lt;em&gt;$ 和 $K_u^&lt;/em&gt;$ 靠近，从而减小状态误差 $e$ 。随着 $e$ 减小，增益调整速度也相应减慢，最终实现渐近收敛。&lt;/p&gt;
+&lt;p&gt;MRAC系统使用复合Lyapunov函数：
+&lt;/p&gt;
+$$V = e^T P e + \tilde{K}_x^T \Gamma_x^{-1} \tilde{K}_x + \tilde{K}_u^T \Gamma_u^{-1} \tilde{K}_u$$
+&lt;p&gt;其中：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;$e^T P e$：状态跟踪误差项&lt;/li&gt;
+&lt;li&gt;$\tilde{K}_x^T \Gamma_x^{-1} \tilde{K}_x$：状态增益误差项&lt;/li&gt;
+&lt;li&gt;$\tilde{K}_u^T \Gamma_u^{-1} \tilde{K}_u$：输入增益误差项&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;通过选择适当的自适应律，可证明：
+&lt;/p&gt;
+$$\dot{V} = -e^T Q e \leq 0$$
+&lt;p&gt;这表明$V$是非增函数，系统状态有界，且当$Q$正定时，$e \to 0$。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;证明：&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;计算 $\dot{V}_{composite}$：&lt;/p&gt;
+$$\dot{V}_{composite} = \frac{d}{dt}(e^T P e) + \frac{d}{dt}(\tilde{K}_x^T \Gamma_x^{-1} \tilde{K}_x) + \frac{d}{dt}(\tilde{K}_u^T \Gamma_u^{-1} \tilde{K}_u)$$
+&lt;p&gt;我们将分别计算这三项。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;计算 $\frac{d}{dt}(e^T P e)$&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;根据链式法则：&lt;/p&gt;
+$$\frac{d}{dt}(e^T P e) = \dot{e}^T P e + e^T P \dot{e}$$
+&lt;p&gt;将误差动态方程 $\dot{e} = A_r e + B(\tilde{K}_x^T x + \tilde{K}_u u_d)$ 代入：&lt;/p&gt;
+$$\frac{d}{dt}(e^T P e) = [A_r e + B(\tilde{K}_x^T x + \tilde{K}_u u_d)]^T P e + e^T P [A_r e + B(\tilde{K}_x^T x + \tilde{K}_u u_d)]$$
+&lt;p&gt;展开：&lt;/p&gt;
+$$\frac{d}{dt}(e^T P e) = e^T A_r^T P e + (\tilde{K}_x^T x + \tilde{K}_u u_d)^T B^T P e + e^T P A_r e + e^T P B (\tilde{K}_x^T x + \tilde{K}_u u_d)$$
+&lt;p&gt;整理：&lt;/p&gt;
+$$\frac{d}{dt}(e^T P e) = e^T (A_r^T P + P A_r) e + [(\tilde{K}_x^T x + \tilde{K}_u u_d)^T B^T P e + e^T P B (\tilde{K}_x^T x + \tilde{K}_u u_d)]$$
+&lt;p&gt;由Lyapunov方程 $A_r^T P + P A_r = -Q$，代入：&lt;/p&gt;
+$$\frac{d}{dt}(e^T P e) = -e^T Q e + [(\tilde{K}_x^T x + \tilde{K}_u u_d)^T B^T P e + e^T P B (\tilde{K}_x^T x + \tilde{K}_u u_d)]$$
+&lt;p&gt;$e^T P B (\tilde{K}_x^T x + \tilde{K}_u u_d)$ 是一个标量（1×1矩阵），因此它等于它的转置：&lt;/p&gt;
+$$e^T P B (\tilde{K}_x^T x + \tilde{K}_u u_d) = [e^T P B (\tilde{K}_x^T x + \tilde{K}_u u_d)]^T = (\tilde{K}_x^T x + \tilde{K}_u u_d)^T B^T P e$$
+&lt;p&gt;因此：&lt;/p&gt;
+$$(\tilde{K}_x^T x + \tilde{K}_u u_d)^T B^T P e + e^T P B (\tilde{K}_x^T x + \tilde{K}_u u_d) = 2 e^T P B (\tilde{K}_x^T x + \tilde{K}_u u_d)$$
+&lt;p&gt;代入得：&lt;/p&gt;
+$$\frac{d}{dt}(e^T P e) = -e^T Q e + 2 e^T P B (\tilde{K}_x^T x + \tilde{K}_u u_d)$$
+&lt;ol start=&#34;2&#34;&gt;
+&lt;li&gt;计算 $\frac{d}{dt}(\tilde{K}_x^T \Gamma_x^{-1} \tilde{K}_x)$&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;根据乘积法则：&lt;/p&gt;
+$$\frac{d}{dt}(\tilde{K}_x^T \Gamma_x^{-1} \tilde{K}_x) = \dot{\tilde{K}}_x^T \Gamma_x^{-1} \tilde{K}_x + \tilde{K}_x^T \Gamma_x^{-1} \dot{\tilde{K}}_x$$
+&lt;p&gt;代入自适应律 $\dot{K}_x = -\Gamma_x x e^T P B$（注意 $\dot{\tilde{K}}_x = \dot{K}_x$）：&lt;/p&gt;
+$$\frac{d}{dt}(\tilde{K}_x^T \Gamma_x^{-1} \tilde{K}_x) = (-\Gamma_x x e^T P B)^T \Gamma_x^{-1} \tilde{K}_x + \tilde{K}_x^T \Gamma_x^{-1} (-\Gamma_x x e^T P B)$$
+&lt;p&gt;简化：&lt;/p&gt;
+$$\frac{d}{dt}(\tilde{K}_x^T \Gamma_x^{-1} \tilde{K}_x) = -e^T P B x^T \Gamma_x \Gamma_x^{-1} \tilde{K}_x - \tilde{K}_x^T \Gamma_x^{-1} \Gamma_x x e^T P B$$
+$$\frac{d}{dt}(\tilde{K}_x^T \Gamma_x^{-1} \tilde{K}_x) = -e^T P B x^T \tilde{K}_x - \tilde{K}_x^T x e^T P B$$
+&lt;p&gt;$\tilde{K}_x^T x e^T P B$ 是一个标量，因此它等于它的转置：&lt;/p&gt;
+$$\tilde{K}_x^T x e^T P B = (\tilde{K}_x^T x e^T P B)^T = B^T P e x^T \tilde{K}_x$$
+&lt;p&gt;因此：&lt;/p&gt;
+$$\frac{d}{dt}(\tilde{K}_x^T \Gamma_x^{-1} \tilde{K}_x) = -2 \tilde{K}_x^T x e^T P B$$
+&lt;ol start=&#34;3&#34;&gt;
+&lt;li&gt;计算 $\frac{d}{dt}(\tilde{K}_u^T \Gamma_u^{-1} \tilde{K}_u)$&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;类似地：&lt;/p&gt;
+$$\frac{d}{dt}(\tilde{K}_u^T \Gamma_u^{-1} \tilde{K}_u) = \dot{\tilde{K}}_u^T \Gamma_u^{-1} \tilde{K}_u + \tilde{K}_u^T \Gamma_u^{-1} \dot{\tilde{K}}_u$$
+&lt;p&gt;代入自适应律 $\dot{K}_u = -\Gamma_u u_d e^T P B$：&lt;/p&gt;
+$$\frac{d}{dt}(\tilde{K}_u^T \Gamma_u^{-1} \tilde{K}_u) = (-\Gamma_u u_d e^T P B)^T \Gamma_u^{-1} \tilde{K}_u + \tilde{K}_u^T \Gamma_u^{-1} (-\Gamma_u u_d e^T P B)$$
+&lt;p&gt;简化：&lt;/p&gt;
+$$\frac{d}{dt}(\tilde{K}_u^T \Gamma_u^{-1} \tilde{K}_u) = -e^T P B u_d^T \Gamma_u \Gamma_u^{-1} \tilde{K}_u - \tilde{K}_u^T \Gamma_u^{-1} \Gamma_u u_d e^T P B$$
+$$\frac{d}{dt}(\tilde{K}_u^T \Gamma_u^{-1} \tilde{K}_u) = -e^T P B u_d^T \tilde{K}_u - \tilde{K}_u^T u_d e^T P B$$
+&lt;p&gt;同样，$\tilde{K}_u^T u_d e^T P B$ 是一个标量，等于它的转置：&lt;/p&gt;
+$$\frac{d}{dt}(\tilde{K}_u^T \Gamma_u^{-1} \tilde{K}_u) = -2 \tilde{K}_u^T u_d e^T P B$$
+&lt;p&gt;现在，将三项导数合并：&lt;/p&gt;
+$$\dot{V}_{composite} = \frac{d}{dt}(e^T P e) + \frac{d}{dt}(\tilde{K}_x^T \Gamma_x^{-1} \tilde{K}_x) + \frac{d}{dt}(\tilde{K}_u^T \Gamma_u^{-1} \tilde{K}_u)$$
+&lt;p&gt;代入前面的结果：&lt;/p&gt;
+$$\dot{V}_{composite} = [-e^T Q e + 2 e^T P B (\tilde{K}_x^T x + \tilde{K}_u u_d)] + [-2 \tilde{K}_x^T x e^T P B] + [-2 \tilde{K}_u^T u_d e^T P B]$$
+&lt;p&gt;展开：&lt;/p&gt;
+$$\dot{V}_{composite} = -e^T Q e + 2 e^T P B \tilde{K}_x^T x + 2 e^T P B \tilde{K}_u u_d - 2 \tilde{K}_x^T x e^T P B - 2 \tilde{K}_u^T u_d e^T P B$$
+&lt;p&gt;注意到 $e^T P B \tilde{K}_x^T x$ 是一个标量，因此：&lt;/p&gt;
+$$e^T P B \tilde{K}_x^T x = (e^T P B \tilde{K}_x^T x)^T = x^T \tilde{K}_x B^T P^T e = x^T \tilde{K}_x B^T P e$$
+&lt;p&gt;但由于 $P$ 是对称矩阵（$P = P^T$），且标量的转置等于自身：&lt;/p&gt;
+$$e^T P B \tilde{K}_x^T x = \tilde{K}_x^T x e^T P B$$
+&lt;p&gt;同理：&lt;/p&gt;
+$$e^T P B \tilde{K}_u u_d = \tilde{K}_u^T u_d e^T P B$$
+&lt;p&gt;因此：&lt;/p&gt;
+$$2 e^T P B \tilde{K}_x^T x - 2 \tilde{K}_x^T x e^T P B = 2 \tilde{K}_x^T x e^T P B - 2 \tilde{K}_x^T x e^T P B = 0$$
+$$2 e^T P B \tilde{K}_u u_d - 2 \tilde{K}_u^T u_d e^T P B = 2 \tilde{K}_u^T u_d e^T P B - 2 \tilde{K}_u^T u_d e^T P B = 0$$
+&lt;p&gt;代入得：&lt;/p&gt;
+$$\dot{V}_{composite} = -e^T Q e + 0 + 0 = -e^T Q e$$
+&lt;h3 id=&#34;初始增益计算&#34;&gt;初始增益计算
+&lt;/h3&gt;&lt;p&gt;初始增益计算是MRAC控制器启动的关键，它基于对车辆动力学的先验知识，让控制器在开始自适应过程前就有一个合理的起点。&lt;/p&gt;
+&lt;p&gt;MRAC的理想增益满足：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;$A + BK_x^* = A_r$ ⇒ $K_x^* = B^{-1}(A_r - A)$&lt;/li&gt;
+&lt;li&gt;$BK_u^* = B_r$ ⇒ $K_u^* = B^{-1}B_r$&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;其中：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;$A, B$：实际车辆系统的状态空间模型&lt;/li&gt;
+&lt;li&gt;$A_r, B_r$：参考模型的状态空间模型&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;由于实际车辆模型$A, B$未知，需要系统辨识估计车辆动态特性。但即使没有先验参数，系统也会缓慢收敛。&lt;/p&gt;
+&lt;h4 id=&#34;一阶模型的初始增益计算&#34;&gt;一阶模型的初始增益计算：
+&lt;/h4&gt;&lt;ol&gt;
+&lt;li&gt;车辆动态特性估计&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;3
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;4
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;5
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;6
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;7
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;8
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;const&lt;/span&gt; &lt;span class=&#34;kt&#34;&gt;double&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;rise_time_estimate&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;n&#34;&gt;latency_param&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;dead_time&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;()&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;+&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;latency_param&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;rise_time&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;();&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;const&lt;/span&gt; &lt;span class=&#34;kt&#34;&gt;double&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;settling_time_estimate&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;n&#34;&gt;latency_param&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;dead_time&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;()&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;+&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;latency_param&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;settling_time&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;();&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;const&lt;/span&gt; &lt;span class=&#34;kt&#34;&gt;double&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;tau_estimate&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;rise_time_estimate&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;&amp;gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;ts_&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;                            &lt;span class=&#34;o&#34;&gt;?&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;rise_time_estimate&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;/&lt;/span&gt; &lt;span class=&#34;mf&#34;&gt;2.2&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;                            &lt;span class=&#34;o&#34;&gt;:&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;settling_time_estimate&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;/&lt;/span&gt; &lt;span class=&#34;mf&#34;&gt;4.0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;&lt;strong&gt;原理&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;一阶系统：$G(s) = \frac{1}{\tau s + 1}$&lt;/li&gt;
+&lt;li&gt;上升时间 $t_r \approx 2.2\tau$&lt;/li&gt;
+&lt;li&gt;调节时间 $t_s \approx 4.0\tau$&lt;/li&gt;
+&lt;li&gt;通过测量的延迟参数估计时间常数$\tau$&lt;/li&gt;
+&lt;/ul&gt;
+&lt;ol start=&#34;2&#34;&gt;
+&lt;li&gt;构建估计的车辆模型&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;n&#34;&gt;matrix_a_estimate&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;-&lt;/span&gt;&lt;span class=&#34;mf&#34;&gt;1.0&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;/&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;tau_estimate&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;n&#34;&gt;matrix_b_estimate&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;mf&#34;&gt;1.0&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;/&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;tau_estimate&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;&lt;strong&gt;对应系统&lt;/strong&gt;：
+&lt;/p&gt;
+$$\dot{x} = -\frac{1}{\tau_{est}}x + \frac{1}{\tau_{est}}u$$
+&lt;ol start=&#34;3&#34;&gt;
+&lt;li&gt;计算初始状态自适应增益&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;3
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;n&#34;&gt;gain_state_adaption_init_&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;matrix_a_reference_&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;-&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;matrix_a_estimate&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;))&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;/&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;n&#34;&gt;matrix_b_estimate&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;);&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;&lt;strong&gt;数学推导&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;参考模型：$\dot{x}_r = -\frac{1}{\tau_r}x_r + \frac{1}{\tau_r}u_d$&lt;/li&gt;
+&lt;li&gt;估计模型：$\dot{x} = -\frac{1}{\tau_{est}}x + \frac{1}{\tau_{est}}u$&lt;/li&gt;
+&lt;li&gt;理想控制律：$u = K_x^* x + K_u^* u_d$&lt;/li&gt;
+&lt;li&gt;代入得：$\dot{x} = (-\frac{1}{\tau_{est}} + \frac{K_x^&lt;em&gt;}{\tau_{est}})x + \frac{K_u^&lt;/em&gt;}{\tau_{est}}u_d$&lt;/li&gt;
+&lt;li&gt;令其等于参考模型：$-\frac{1}{\tau_{est}} + \frac{K_x^*}{\tau_{est}} = -\frac{1}{\tau_r}$&lt;/li&gt;
+&lt;li&gt;解得：$K_x^* = 1 - \frac{\tau_{est}}{\tau_r}$&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;在代码中，这个计算被一般化为：
+&lt;/p&gt;
+$$K_x^* = \frac{A_r - A_{est}}{B_{est}} = \frac{(-1/\tau_r) - (-1/\tau_{est})}{1/\tau_{est}} = 1 - \frac{\tau_{est}}{\tau_r}$$
+&lt;ol start=&#34;4&#34;&gt;
+&lt;li&gt;计算初始输入自适应增益&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;n&#34;&gt;gain_input_adaption_init_&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;n&#34;&gt;matrix_b_reference_&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;/&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;matrix_b_estimate&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;);&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;&lt;strong&gt;数学推导&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;参考模型：$\frac{1}{\tau_r}u_d$&lt;/li&gt;
+&lt;li&gt;估计模型：$\frac{1}{\tau_{est}}u$&lt;/li&gt;
+&lt;li&gt;令 $\frac{K_u^*}{\tau_{est}} = \frac{1}{\tau_r}$&lt;/li&gt;
+&lt;li&gt;解得：$K_u^* = \frac{\tau_{est}}{\tau_r}$&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;在代码中，这个计算被一般化为：
+&lt;/p&gt;
+$$K_u^* = \frac{B_r}{B_{est}} = \frac{1/\tau_r}{1/\tau_{est}} = \frac{\tau_{est}}{\tau_r}$$
+&lt;h4 id=&#34;二阶模型的初始增益计算&#34;&gt;二阶模型的初始增益计算
+&lt;/h4&gt;&lt;ol&gt;
+&lt;li&gt;车辆动态特性估计&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;const&lt;/span&gt; &lt;span class=&#34;kt&#34;&gt;double&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;wn_estimate&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;mf&#34;&gt;1.8&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;/&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;rise_time_estimate&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;const&lt;/span&gt; &lt;span class=&#34;kt&#34;&gt;double&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;zeta_estimate&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;mf&#34;&gt;4.6&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;/&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;rise_time_estimate&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;*&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;settling_time_estimate&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;);&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;&lt;strong&gt;原理&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;二阶系统：$G(s) = \frac{\omega_n^2}{s^2 + 2\zeta\omega_n s + \omega_n^2}$&lt;/li&gt;
+&lt;li&gt;上升时间 $t_r \approx \frac{1.8}{\omega_n}$&lt;/li&gt;
+&lt;li&gt;调节时间 $t_s \approx \frac{4.6}{\zeta\omega_n}$&lt;/li&gt;
+&lt;/ul&gt;
+&lt;ol start=&#34;2&#34;&gt;
+&lt;li&gt;构建估计的车辆模型&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;3
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;4
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;n&#34;&gt;matrix_a_estimate&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;1&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;mf&#34;&gt;1.0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;n&#34;&gt;matrix_a_estimate&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;1&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;-&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;wn_estimate&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;*&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;wn_estimate&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;n&#34;&gt;matrix_a_estimate&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;1&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;1&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;-&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;2&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;*&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;zeta_estimate&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;*&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;wn_estimate&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;n&#34;&gt;matrix_b_estimate&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;1&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;wn_estimate&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;*&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;wn_estimate&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;&lt;strong&gt;对应系统&lt;/strong&gt;：
+&lt;/p&gt;
+$$\begin{bmatrix} \dot{x}_1 \\ \dot{x}_2 \end{bmatrix} = 
+\begin{bmatrix} 0 &amp; 1 \\ -\omega_n^2 &amp; -2\zeta\omega_n \end{bmatrix}
+\begin{bmatrix} x_1 \\ x_2 \end{bmatrix} +
+\begin{bmatrix} 0 \\ \omega_n^2 \end{bmatrix} u$$
+&lt;ol start=&#34;3&#34;&gt;
+&lt;li&gt;计算初始状态自适应增益&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;3
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;4
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;n&#34;&gt;gain_state_adaption_init_&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;col&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;common&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;::&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;math&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;::&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;PseudoInverse&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&#34;kt&#34;&gt;double&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;2&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;1&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;matrix_b_estimate&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;*&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;     &lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;matrix_a_reference_&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;-&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;matrix_a_estimate&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;))&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;transpose&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;();&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;&lt;strong&gt;数学推导&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;理想条件：$A + BK_x^{*T} = A_r$&lt;/li&gt;
+&lt;li&gt;整理得：$BK_x^{*T} = A_r - A$&lt;/li&gt;
+&lt;li&gt;由于B不是方阵，使用伪逆求解：
+$$K_x^{*T} = B^+ (A_r - A)$$
+其中$B^+ = (B^T B)^{-1} B^T$是B的伪逆&lt;/li&gt;
+&lt;/ul&gt;
+&lt;ol start=&#34;4&#34;&gt;
+&lt;li&gt;计算初始输入自适应增益&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;3
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;4
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;n&#34;&gt;gain_input_adaption_init_&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;col&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;common&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;::&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;math&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;::&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;PseudoInverse&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&#34;kt&#34;&gt;double&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;2&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;1&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;matrix_b_estimate&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;*&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;     &lt;span class=&#34;n&#34;&gt;matrix_b_reference_&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;transpose&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;();&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;&lt;strong&gt;数学推导&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;理想条件：$BK_u^* = B_r$&lt;/li&gt;
+&lt;li&gt;求解：$K_u^* = B^+ B_r$&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;抗积分饱和&#34;&gt;抗积分饱和
+&lt;/h3&gt;&lt;p&gt;当控制量达到物理限幅时，标准MRAC可能失稳。Apollo通过抗积分饱和机制解决：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;3
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;4
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;5
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;6
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;7
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;8
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;kt&#34;&gt;void&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;MracController&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;::&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;AntiWindupCompensation&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;k&#34;&gt;const&lt;/span&gt; &lt;span class=&#34;kt&#34;&gt;double&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;control_command&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;                                           &lt;span class=&#34;k&#34;&gt;const&lt;/span&gt; &lt;span class=&#34;kt&#34;&gt;double&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;previous_command&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;  &lt;span class=&#34;n&#34;&gt;Matrix&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;offset_windup&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;Matrix&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;::&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;Zero&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;model_order_&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;1&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;);&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;  &lt;span class=&#34;n&#34;&gt;offset_windup&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;((&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;control_command&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;bound_command_&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;?&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;bound_command_&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;-&lt;/span&gt; &lt;span class=&#34;nl&#34;&gt;control_command&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;:&lt;/span&gt; &lt;span class=&#34;mf&#34;&gt;0.0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;+&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;                        &lt;span class=&#34;p&#34;&gt;((&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;control_command&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;-&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;bound_command_&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;?&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;-&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;bound_command_&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;-&lt;/span&gt; &lt;span class=&#34;nl&#34;&gt;control_command&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;:&lt;/span&gt; &lt;span class=&#34;mf&#34;&gt;0.0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;);&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;  &lt;span class=&#34;p&#34;&gt;...&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;  &lt;span class=&#34;n&#34;&gt;compensation_anti_windup_&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;col&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;gain_anti_windup_&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;*&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;offset_windup&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;p&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;该机制在自适应律中加入补偿项：
+&lt;/p&gt;
+$$\dot{K} = -\Gamma \phi (e^T P B + c^T)$$
+&lt;p&gt;其中$c$是抗饱和补偿项。这确保了即使在控制饱和情况下，李雅普诺夫函数导数仍保持负半定，维持系统稳定性。&lt;/p&gt;
+&lt;p&gt;在饱和出现时，如果继续使用原始误差更新自适应律，控制器会错误地认为参数不匹配是误差的主要原因，需要进一步增大自适应增益来减小误差。当控制量饱和时，补偿项会减小状态误差的有效值，自适应律不会过度调整增益，防止了&amp;quot;越调越错&amp;quot;的恶性循环，保持系统稳定性。&lt;/p&gt;
+&lt;h3 id=&#34;增益限幅&#34;&gt;增益限幅
+&lt;/h3&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;3
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;4
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;5
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;6
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;7
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;8
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;if&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;model_order_&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;==&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;1&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;&amp;amp;&amp;amp;&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;adaption_clamping_enabled&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;&amp;amp;&amp;amp;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;gain_state_adaption_&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span class=&#34;mf&#34;&gt;0.0&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;||&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;     &lt;span class=&#34;n&#34;&gt;gain_state_adaption_&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;gain_state_clamping_&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;||&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;     &lt;span class=&#34;n&#34;&gt;gain_input_adaption_&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;gain_input_clamping_&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;||&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;     &lt;span class=&#34;n&#34;&gt;gain_input_adaption_&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&#34;mf&#34;&gt;1.0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;))&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;  &lt;span class=&#34;n&#34;&gt;gain_state_adaption_&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;col&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;gain_state_adaption_&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;col&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;1&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;);&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;  &lt;span class=&#34;n&#34;&gt;gain_input_adaption_&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;col&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;gain_input_adaption_&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;col&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;1&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;);&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;p&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;通过设置自适应增益的上下限，防止增益发散，确保系统参数有界。&lt;/p&gt;
+&lt;h3 id=&#34;低速自适应禁用&#34;&gt;低速自适应禁用
+&lt;/h3&gt;&lt;p&gt;在调用代码中：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;3
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;4
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;5
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;6
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;7
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;if&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;std&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;::&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;fabs&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;vehicle_state&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;linear_velocity&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;())&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;FLAGS_minimum_speed_resolution&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;  &lt;span class=&#34;n&#34;&gt;mrac_controller_&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;SetStateAdaptionRate&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mf&#34;&gt;1.0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;);&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;  &lt;span class=&#34;n&#34;&gt;mrac_controller_&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;SetInputAdaptionRate&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mf&#34;&gt;1.0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;);&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;p&#34;&gt;}&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;else&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;  &lt;span class=&#34;n&#34;&gt;mrac_controller_&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;SetStateAdaptionRate&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mf&#34;&gt;0.0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;);&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;  &lt;span class=&#34;n&#34;&gt;mrac_controller_&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;SetInputAdaptionRate&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mf&#34;&gt;0.0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;);&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;p&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;在低速时禁用自适应，因为低速时车辆动力学特性变化剧烈且难以建模，继续自适应可能导致不稳定。&lt;/p&gt;
+&lt;h1 id=&#34;autoware-源码学习&#34;&gt;Autoware 源码学习
+&lt;/h1&gt;&lt;p&gt;Autoware 源码中主要针对漂移现象进行补偿，即车辆的“零点”不准确。具体表现为：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;机械偏差&lt;/strong&gt;：方向盘或转向机在物理上没有完全居中。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;传感器偏差&lt;/strong&gt;：测量转向角的传感器（如转向角传感器）存在零点漂移或校准误差。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;软件偏差&lt;/strong&gt;：控制指令与实际执行之间可能存在固定的偏移量。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;整个补偿过程可以用一个闭环来理解：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;测量&lt;/strong&gt;：获取车辆的实际转向角 &lt;code&gt;θ_measured&lt;/code&gt;。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;校正输入&lt;/strong&gt;：&lt;code&gt;θ_corrected = θ_measured - offset_est&lt;/code&gt;。将 &lt;code&gt;θ_corrected&lt;/code&gt; 作为真实状态输入给 MPC。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;MPC 计算&lt;/strong&gt;：MPC 基于 &lt;code&gt;θ_corrected&lt;/code&gt; 计算最优控制命令 &lt;code&gt;u_mpc&lt;/code&gt;。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;补偿输出&lt;/strong&gt;：&lt;code&gt;u_command = u_mpc + offset_est&lt;/code&gt;。将 &lt;code&gt;u_command&lt;/code&gt; 发送给车辆执行器。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;更新估计&lt;/strong&gt;：在车辆低速直行时，用 &lt;code&gt;θ_measured&lt;/code&gt; 更新 &lt;code&gt;offset_est&lt;/code&gt;。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;潜在的问题：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;收敛性&lt;/strong&gt;：偏移估计器需要在车辆低速直行一段时间后才能收敛到一个准确的值。在车辆刚启动或频繁转弯时，估计值可能不准。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;参数配置&lt;/strong&gt;：&lt;code&gt;vel_thres&lt;/code&gt; 和 &lt;code&gt;steer_thres&lt;/code&gt; 的设置至关重要。如果阈值过低，估计器可能很少有机会更新；如果过高，则可能在车辆明显转弯时错误地更新偏移，导致估计错误。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;动态环境&lt;/strong&gt;：在坡道、侧风等外部干扰下，即使转向角为0，车辆也可能不会直行。此时，&lt;code&gt;steer_thres&lt;/code&gt; 条件可能不满足，避免了错误的估计。&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        </item>
+        <item>
+        <title>卡尔曼滤波与组合导航案例分析</title>
+        <link>https://zouzhenshan.github.io/p/kalman-filter-integrated-navigation-case-study/</link>
+        <pubDate>Thu, 13 Aug 2026 00:00:00 +0000</pubDate>
+        
+        <guid>https://zouzhenshan.github.io/p/kalman-filter-integrated-navigation-case-study/</guid>
+        <description>&lt;h1 id=&#34;教程&#34;&gt;教程
+&lt;/h1&gt;&lt;p&gt;&lt;a class=&#34;link&#34; href=&#34;https://zsc.github.io/control_tutorial/html/chapter6.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;第6章:卡尔曼滤波与随机控制&lt;/a&gt;&lt;/p&gt;
+&lt;h1 id=&#34;补充笔记&#34;&gt;补充笔记
+&lt;/h1&gt;&lt;h2 id=&#34;卡尔曼滤波递推公式推导&#34;&gt;卡尔曼滤波递推公式推导
+&lt;/h2&gt;&lt;h3 id=&#34;时间更新公式推导&#34;&gt;时间更新公式推导
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;目标&lt;/strong&gt;：利用 \(k\) 时刻的最优估计 \(\hat{x}_{k|k}\) 和系统模型，预测 \(k+1\) 时刻的状态 \(\hat{x}_{k+1|k}\) 及其误差协方差 \(P_{k+1|k}\)。&lt;/p&gt;
+&lt;h4 id=&#34;状态预测-hatx_k1k-的推导&#34;&gt;状态预测 \(\hat{x}_{k+1|k}\) 的推导
+&lt;/h4&gt;&lt;p&gt;根据系统状态方程：
+&lt;/p&gt;
+$$x_{k+1} = A_k x_k + B_k u_k + w_k $$
+&lt;p&gt;我们要计算 \(k+1\) 时刻的先验估计（即在看到 \(y_{k+1}\) 之前的期望）：
+&lt;/p&gt;
+$$\hat{x}_{k+1|k} = E[x_{k+1} | y_{1:k}] $$
+&lt;p&gt;代入状态方程：
+&lt;/p&gt;
+$$\hat{x}_{k+1|k} = E[A_k x_k + B_k u_k + w_k | y_{1:k}] $$
+&lt;p&gt;利用期望的线性性质：
+&lt;/p&gt;
+$$\hat{x}_{k+1|k} = A_k E[x_k | y_{1:k}] + B_k u_k + E[w_k | y_{1:k}] $$
+&lt;p&gt;其中：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;\(E[x_k | y_{1:k}]\) 正是 \(k\) 时刻的最优后验估计 \(\hat{x}_{k|k}\)。&lt;/li&gt;
+&lt;li&gt;\(w_k\) 是过程噪声，假设其均值为 0，且与过去的测量值 \(y_{1:k}\) 独立，因此 \(E[w_k | y_{1:k}] = E[w_k] = 0\)。&lt;/li&gt;
+&lt;li&gt;\(u_k\) 是已知控制量。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;结论 1&lt;/strong&gt;：
+&lt;/p&gt;
+$$\hat{x}_{k+1|k} = A_k \hat{x}_{k|k} + B_k u_k $$
+&lt;h4 id=&#34;误差协方差预测-p_k1k-的推导&#34;&gt;误差协方差预测 \(P_{k+1|k}\) 的推导
+&lt;/h4&gt;&lt;p&gt;定义 \(k+1\) 时刻的预测误差 \(\tilde{x}_{k+1|k}\)：
+&lt;/p&gt;
+$$\tilde{x}_{k+1|k} = x_{k+1} - \hat{x}_{k+1|k} $$
+&lt;p&gt;代入 \(x_{k+1}\) 和 \(\hat{x}_{k+1|k}\) 的表达式：
+&lt;/p&gt;
+$$\tilde{x}_{k+1|k} = (A_k x_k + B_k u_k + w_k) - (A_k \hat{x}_{k|k} + B_k u_k) $$
+$$\tilde{x}_{k+1|k} = A_k (x_k - \hat{x}_{k|k}) + w_k $$
+$$\tilde{x}_{k+1|k} = A_k \tilde{x}_{k|k} + w_k $$
+&lt;p&gt;计算预测误差协方差 \(P_{k+1|k} = E[\tilde{x}_{k+1|k} \tilde{x}_{k+1|k}^T]\)：
+&lt;/p&gt;
+$$P_{k+1|k} = E[(A_k \tilde{x}_{k|k} + w_k)(A_k \tilde{x}_{k|k} + w_k)^T] $$
+$$P_{k+1|k} = E[(A_k \tilde{x}_{k|k} + w_k)(\tilde{x}_{k|k}^T A_k^T + w_k^T)] $$
+&lt;p&gt;展开括号：
+&lt;/p&gt;
+$$P_{k+1|k} = E[A_k \tilde{x}_{k|k} \tilde{x}_{k|k}^T A_k^T + A_k \tilde{x}_{k|k} w_k^T + w_k \tilde{x}_{k|k}^T A_k^T + w_k w_k^T] $$
+&lt;p&gt;利用期望的线性性质和独立性假设：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;\(E[A_k \tilde{x}_{k|k} \tilde{x}_{k|k}^T A_k^T] = A_k E[\tilde{x}_{k|k} \tilde{x}_{k|k}^T] A_k^T = A_k P_{k|k} A_k^T\)&lt;/li&gt;
+&lt;li&gt;\(w_k\) 与过去的状态估计误差 \(\tilde{x}_{k|k}\) 不相关（独立），且 \(E[w_k]=0\)，所以交叉项 \(E[A_k \tilde{x}_{k|k} w_k^T] = 0\) 和 \(E[w_k \tilde{x}_{k|k}^T A_k^T] = 0\)。&lt;/li&gt;
+&lt;li&gt;\(E[w_k w_k^T] = Q_k\)（过程噪声协方差）。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;strong&gt;结论 2&lt;/strong&gt;：
+&lt;/p&gt;
+$$P_{k+1|k} = A_k P_{k|k} A_k^T + Q_k $$
+&lt;hr&gt;
+&lt;h3 id=&#34;测量更新公式推导&#34;&gt;测量更新公式推导
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;目标&lt;/strong&gt;：利用新的测量值 \(y_{k+1}\) 修正先验估计 \(\hat{x}_{k+1|k}\)，得到后验估计 \(\hat{x}_{k+1|k+1}\)。&lt;/p&gt;
+&lt;h4 id=&#34;设定更新形式&#34;&gt;设定更新形式
+&lt;/h4&gt;&lt;p&gt;我们假设后验估计是先验估计加上一个修正项：
+&lt;/p&gt;
+$$\hat{x}_{k+1|k+1} = \hat{x}_{k+1|k} + K_{k+1} (y_{k+1} - \hat{y}_{k+1|k}) $$
+&lt;p&gt;其中 \(\hat{y}_{k+1|k}\) 是基于先验状态预测的测量值：
+&lt;/p&gt;
+$$\hat{y}_{k+1|k} = C_{k+1} \hat{x}_{k+1|k} $$
+&lt;p&gt;代入上式，即得到状态更新公式：&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;结论 3&lt;/strong&gt;：
+&lt;/p&gt;
+$$\hat{x}_{k+1|k+1} = \hat{x}_{k+1|k} + K_{k+1} (y_{k+1} - C_{k+1} \hat{x}_{k+1|k}) $$
+&lt;h4 id=&#34;推导卡尔曼增益-k_k1&#34;&gt;推导卡尔曼增益 \(K_{k+1}\)
+&lt;/h4&gt;&lt;p&gt;卡尔曼增益 \(K_{k+1}\) 的选择标准是&lt;strong&gt;最小化后验误差协方差&lt;/strong&gt; \(P_{k+1|k+1}\) &lt;strong&gt;的迹（Trace）&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;首先定义后验误差 \(\tilde{x}_{k+1|k+1}\)：
+&lt;/p&gt;
+$$\tilde{x}_{k+1|k+1} = x_{k+1} - \hat{x}_{k+1|k+1} $$
+&lt;p&gt;代入 \(\hat{x}_{k+1|k+1}\) 的表达式：
+&lt;/p&gt;
+$$\tilde{x}_{k+1|k+1} = x_{k+1} - [\hat{x}_{k+1|k} + K_{k+1} (y_{k+1} - C_{k+1} \hat{x}_{k+1|k})] $$
+&lt;p&gt;利用测量方程 \(y_{k+1} = C_{k+1} x_{k+1} + v_{k+1}\)：
+&lt;/p&gt;
+$$\tilde{x}_{k+1|k+1} = x_{k+1} - \hat{x}_{k+1|k} - K_{k+1} (C_{k+1} x_{k+1} + v_{k+1} - C_{k+1} \hat{x}_{k+1|k}) $$
+$$\tilde{x}_{k+1|k+1} = (x_{k+1} - \hat{x}_{k+1|k}) - K_{k+1} C_{k+1} (x_{k+1} - \hat{x}_{k+1|k}) - K_{k+1} v_{k+1} $$
+&lt;p&gt;注意到 \(x_{k+1} - \hat{x}_{k+1|k} = \tilde{x}_{k+1|k}\)（先验误差）：
+&lt;/p&gt;
+$$\tilde{x}_{k+1|k+1} = (I - K_{k+1} C_{k+1}) \tilde{x}_{k+1|k} - K_{k+1} v_{k+1} $$
+&lt;p&gt;计算后验协方差 \(P_{k+1|k+1} = E[\tilde{x}_{k+1|k+1} \tilde{x}_{k+1|k+1}^T]\)。
+假设先验误差 \(\tilde{x}_{k+1|k}\) 与测量噪声 \(v_{k+1}\) 不相关：
+&lt;/p&gt;
+$$P_{k+1|k+1} = (I - K_{k+1} C_{k+1}) P_{k+1|k} (I - K_{k+1} C_{k+1})^T + K_{k+1} R_{k+1} K_{k+1}^T $$
+&lt;p&gt;为了求最优 \(K_{k+1}\)，我们需要最小化 \(J = \text{tr}(P_{k+1|k+1})\)。
+对 \(K_{k+1}\) 求导并令其为 0（利用矩阵求导法则 \(\frac{\partial \text{tr}(ABA^T)}{\partial A} = 2AB\) 当 \(B\) 对称时）：&lt;/p&gt;
+$$\frac{\partial J}{\partial K_{k+1}} = -2 (I - K_{k+1} C_{k+1}) P_{k+1|k} C_{k+1}^T + 2 K_{k+1} R_{k+1} = 0 $$
+&lt;p&gt;化简：
+&lt;/p&gt;
+$$-P_{k+1|k} C_{k+1}^T + K_{k+1} C_{k+1} P_{k+1|k} C_{k+1}^T + K_{k+1} R_{k+1} = 0 $$
+$$K_{k+1} (C_{k+1} P_{k+1|k} C_{k+1}^T + R_{k+1}) = P_{k+1|k} C_{k+1}^T $$
+&lt;p&gt;&lt;strong&gt;结论 4（卡尔曼增益公式）&lt;/strong&gt;：
+&lt;/p&gt;
+$$K_{k+1} = P_{k+1|k} C_{k+1}^T (C_{k+1} P_{k+1|k} C_{k+1}^T + R_{k+1})^{-1} $$
+&lt;h4 id=&#34;推导后验协方差-p_k1k1-的简化形式&#34;&gt;推导后验协方差 \(P_{k+1|k+1}\) 的简化形式
+&lt;/h4&gt;&lt;p&gt;将求得的 \(K_{k+1}\) 代回 \(P_{k+1|k+1}\) 的展开式：
+&lt;/p&gt;
+$$P_{k+1|k+1} = (I - K C) P (I - K C)^T + K R K^T $$
+&lt;p&gt;
+（为简洁省略下标 \(k+1|\) 等）&lt;/p&gt;
+&lt;p&gt;展开第一项：
+&lt;/p&gt;
+$$P_{k+1|k+1} = (I - K C) P - (I - K C) P C^T K^T + K R K^T $$
+$$P_{k+1|k+1} = (I - K C) P - [P C^T - K C P C^T] K^T + K R K^T $$
+&lt;p&gt;注意卡尔曼增益的定义隐含了 \(K (C P C^T + R) = P C^T\)，即 \(P C^T = K (C P C^T + R)\)。
+代入上式方括号部分：
+&lt;/p&gt;
+$$P C^T - K C P C^T = K (C P C^T + R) - K C P C^T = K R $$
+&lt;p&gt;所以：
+&lt;/p&gt;
+$$P_{k+1|k+1} = (I - K C) P - (K R) K^T + K R K^T $$
+$$P_{k+1|k+1} = (I - K C) P $$
+&lt;p&gt;&lt;strong&gt;结论 5&lt;/strong&gt;：
+&lt;/p&gt;
+$$P_{k+1|k+1} = (I - K_{k+1} C_{k+1}) P_{k+1|k} $$
+&lt;hr&gt;
+&lt;h3 id=&#34;总结&#34;&gt;总结
+&lt;/h3&gt;&lt;p&gt;通过上述推导，我们得到了所有公式：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;预测步骤&lt;/strong&gt;：&lt;/p&gt;
+&lt;p&gt;\(\hat{x}_{k+1|k} = A_k \hat{x}_{k|k} + B_k u_k\)&lt;/p&gt;
+&lt;p&gt;\(P_{k+1|k} = A_k P_{k|k} A_k^T + Q_k\)&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;更新步骤&lt;/strong&gt;：
+\(K_{k+1} = P_{k+1|k} C_{k+1}^T (C_{k+1} P_{k+1|k} C_{k+1}^T + R_{k+1})^{-1}\)&lt;/p&gt;
+&lt;p&gt;\(\hat{x}_{k+1|k+1} = \hat{x}_{k+1|k} + K_{k+1} (y_{k+1} - C_{k+1} \hat{x}_{k+1|k})\)&lt;/p&gt;
+&lt;p&gt;\(P_{k+1|k+1} = (I - K_{k+1} C_{k+1}) P_{k+1|k}\)&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;无迹卡尔曼滤波&#34;&gt;无迹卡尔曼滤波
+&lt;/h2&gt;&lt;p&gt;无迹卡尔曼滤波（Unscented Kalman Filter, UKF）是为了解决扩展卡尔曼滤波（EKF）在处理强非线性系统时由于泰勒级数一阶展开带来的线性化误差而提出的一种滤波算法。&lt;/p&gt;
+&lt;p&gt;UKF 的核心思想是：&lt;strong&gt;近似一个非线性函数的概率分布，比近似这个非线性函数本身更容易。&lt;/strong&gt; 它通过一种称为无迹变换（Unscented Transform, UT）的确定性采样技术，挑选出少量具有代表性的“Sigma点”，这些点能够完美捕获原状态分布的均值和协方差。然后将这些点代入非线性方程中传播，再利用传播后的点重新计算均值和协方差。&lt;/p&gt;
+&lt;h3 id=&#34;非线性系统模型&#34;&gt;非线性系统模型
+&lt;/h3&gt;&lt;p&gt;假设一个离散时间非线性系统，其状态方程和观测方程如下：
+&lt;/p&gt;
+$$x_k = f(x_{k-1}, u_{k-1}) + w_{k-1} $$
+$$z_k = h(x_k) + v_k $$
+&lt;ul&gt;
+&lt;li&gt;\(x_k \in \mathbb{R}^n\)：系统的状态向量（维度为 \(n\)）。&lt;/li&gt;
+&lt;li&gt;\(u_{k-1}\)：系统控制输入。&lt;/li&gt;
+&lt;li&gt;\(z_k \in \mathbb{R}^m\)：观测向量（维度为 \(m\)）。&lt;/li&gt;
+&lt;li&gt;\(f(\cdot)\) 和 \(h(\cdot)\)：分别为非线性的状态转移函数和观测函数。&lt;/li&gt;
+&lt;li&gt;\(w_{k-1} \sim \mathcal{N}(0, Q)\)：过程噪声，协方差矩阵为 \(Q\)。&lt;/li&gt;
+&lt;li&gt;\(v_k \sim \mathcal{N}(0, R)\)：观测噪声，协方差矩阵为 \(R\)。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;h3 id=&#34;核心原理无迹变换&#34;&gt;核心原理：无迹变换
+&lt;/h3&gt;&lt;p&gt;无迹变换是 UKF 的数学基础。假设有一个随机变量 \(x\)（均值为 \(\bar{x}\)，协方差为 \(P_{xx}\)），它经过一个非线性变换 \(y = g(x)\)。我们希望求出 \(y\) 的均值 \(\bar{y}\) 和协方差 \(P_{yy}\)。&lt;/p&gt;
+&lt;p&gt;UT 变换的具体步骤如下：&lt;/p&gt;
+&lt;h4 id=&#34;构造-sigma-点&#34;&gt;构造 Sigma 点
+&lt;/h4&gt;&lt;p&gt;对于 \(n\) 维状态向量，我们确定性地选取 \(2n + 1\) 个 Sigma 点 \(\chi^{(i)}\)。选取规则如下：&lt;/p&gt;
+$$\chi^{(0)} = \bar{x} $$
+$$\chi^{(i)} = \bar{x} + \left( \sqrt{(n+\lambda)P_{xx}} \right)_i, \quad i = 1, \dots, n $$
+$$\chi^{(i)} = \bar{x} - \left( \sqrt{(n+\lambda)P_{xx}} \right)_{i-n}, \quad i = n+1, \dots, 2n $$
+&lt;p&gt;&lt;strong&gt;参数解释：&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;\(\lambda = \alpha^2 (n + \kappa) - n\) 是一个缩放比例参数。&lt;/li&gt;
+&lt;li&gt;\(\alpha\)：决定 Sigma 点围绕均值的分布范围，通常取一个很小的正数（如 \(10^{-3}\) 或 \(10^{-4}\) ）以避免非线性函数的非局部效应。&lt;/li&gt;
+&lt;li&gt;\(\kappa\)：次级缩放参数，通常取 \(0\) 或 \(3-n\)。&lt;/li&gt;
+&lt;li&gt;\(\left( \sqrt{(n+\lambda)P_{xx}} \right)_i\)：表示矩阵 \((n+\lambda)P_{xx}\) 经过 &lt;strong&gt;Cholesky 分解&lt;/strong&gt;（即 \(A = L L^T\)）得到的下三角矩阵 \(L\) 的第 \(i\) 列。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;计算权重&#34;&gt;计算权重
+&lt;/h4&gt;&lt;p&gt;我们需要为这些 Sigma 点分配计算均值（\(W_m\)）和计算协方差（\(W_c\)）的权重：&lt;/p&gt;
+$$W_m^{(0)} = \frac{\lambda}{n+\lambda} $$
+$$W_c^{(0)} = \frac{\lambda}{n+\lambda} + (1 - \alpha^2 + \beta) $$
+$$W_m^{(i)} = W_c^{(i)} = \frac{1}{2(n+\lambda)}, \quad i = 1, \dots, 2n $$
+&lt;p&gt;&lt;strong&gt;参数解释：&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;\(\beta\)：用于合并关于 \(x\) 分布的先验知识。如果 \(x\) 严格服从高斯分布，最优选择是 \(\beta = 2\)（这有助于减小高阶截断误差）。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;非线性传播与统计特性重构&#34;&gt;非线性传播与统计特性重构
+&lt;/h4&gt;&lt;p&gt;将所有 Sigma 点代入非线性函数 \(g(\cdot)\) 中：
+&lt;/p&gt;
+$$\mathcal{Y}^{(i)} = g(\chi^{(i)}), \quad i = 0, 1, \dots, 2n $$
+&lt;p&gt;则输出 \(y\) 的近似均值和协方差为：
+&lt;/p&gt;
+$$\bar{y} \approx \sum_{i=0}^{2n} W_m^{(i)} \mathcal{Y}^{(i)} $$
+$$P_{yy} \approx \sum_{i=0}^{2n} W_c^{(i)} \left( \mathcal{Y}^{(i)} - \bar{y} \right) \left( \mathcal{Y}^{(i)} - \bar{y} \right)^T $$
+&lt;hr&gt;
+&lt;h3 id=&#34;ukf-算法实现流程&#34;&gt;UKF 算法实现流程
+&lt;/h3&gt;&lt;p&gt;结合卡尔曼滤波的“预测-更新”框架，将无迹变换嵌入其中，就得到了 UKF 的完整流程。&lt;/p&gt;
+&lt;h4 id=&#34;步骤-0初始化&#34;&gt;步骤 0：初始化
+&lt;/h4&gt;&lt;p&gt;初始化状态均值 \(\hat{x}_0\) 和状态协方差 \(P_0\)：
+&lt;/p&gt;
+$$\hat{x}_0 = \mathbb{E}[x_0] $$
+$$P_0 = \mathbb{E}[(x_0 - \hat{x}_0)(x_0 - \hat{x}_0)^T] $$
+&lt;p&gt;进入循环，对于每一时刻 \(k = 1, 2, \dots\) 执行以下步骤：&lt;/p&gt;
+&lt;h4 id=&#34;步骤-1时间更新&#34;&gt;步骤 1：时间更新
+&lt;/h4&gt;&lt;p&gt;&lt;strong&gt;1.1 根据上一时刻的后验状态生成 Sigma 点：&lt;/strong&gt;
+&lt;/p&gt;
+$$\chi_{k-1}^{(0)} = \hat{x}_{k-1} $$
+$$\chi_{k-1}^{(i)} = \hat{x}_{k-1} + \left( \sqrt{(n+\lambda)P_{k-1}} \right)_i, \quad i = 1, \dots, n $$
+$$\chi_{k-1}^{(i)} = \hat{x}_{k-1} - \left( \sqrt{(n+\lambda)P_{k-1}} \right)_{i-n}, \quad i = n+1, \dots, 2n $$
+&lt;p&gt;&lt;strong&gt;1.2 Sigma 点经过状态方程传播：&lt;/strong&gt;
+&lt;/p&gt;
+$$\chi_{k|k-1}^{(i)} = f(\chi_{k-1}^{(i)}, u_{k-1}), \quad i = 0, \dots, 2n $$
+&lt;p&gt;&lt;strong&gt;1.3 计算一步预测状态均值（先验估计）：&lt;/strong&gt;
+&lt;/p&gt;
+$$\hat{x}_{k|k-1} = \sum_{i=0}^{2n} W_m^{(i)} \chi_{k|k-1}^{(i)} $$
+&lt;p&gt;&lt;strong&gt;1.4 计算一步预测状态协方差（先验协方差）：&lt;/strong&gt;
+由于是加性噪声模型，直接在结果后加上过程噪声协方差 \(Q\)：
+&lt;/p&gt;
+$$P_{k|k-1} = \sum_{i=0}^{2n} W_c^{(i)} \left( \chi_{k|k-1}^{(i)} - \hat{x}_{k|k-1} \right) \left( \chi_{k|k-1}^{(i)} - \hat{x}_{k|k-1} \right)^T + Q $$
+&lt;hr&gt;
+&lt;h4 id=&#34;步骤-2测量更新&#34;&gt;步骤 2：测量更新
+&lt;/h4&gt;&lt;p&gt;&lt;em&gt;注意：为了更高的精度，在预测结束后，通常利用新的先验均值 \(\hat{x}_{k|k-1}\) 和先验协方差 \(P_{k|k-1}\) &lt;strong&gt;重新生成一遍&lt;/strong&gt; &lt;strong&gt;Sigma&lt;/strong&gt; &lt;strong&gt;点&lt;/strong&gt;。虽然有些简化的文献会直接使用之前传播过来的 \(\chi_{k|k-1}^{(i)}\)，但重新生成能更好地捕捉当前的分布。这里给出重新生成的标准做法。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;根据先验分布重新生成 Sigma 点：&lt;/strong&gt;
+&lt;/p&gt;
+$$X_{k|k-1}^{(0)} = \hat{x}_{k|k-1} $$
+$$X_{k|k-1}^{(i)} = \hat{x}_{k|k-1} + \left( \sqrt{(n+\lambda)P_{k|k-1}} \right)_i, \quad i = 1, \dots, n $$
+$$X_{k|k-1}^{(i)} = \hat{x}_{k|k-1} - \left( \sqrt{(n+\lambda)P_{k|k-1}} \right)_{i-n}, \quad i = n+1, \dots, 2n $$
+&lt;p&gt;&lt;strong&gt;Sigma 点经过观测方程传播：&lt;/strong&gt;
+&lt;/p&gt;
+$$\mathcal{Z}_{k|k-1}^{(i)} = h(X_{k|k-1}^{(i)}), \quad i = 0, \dots, 2n $$
+&lt;p&gt;&lt;strong&gt;计算预测的观测均值：&lt;/strong&gt;
+&lt;/p&gt;
+$$\hat{z}_k = \sum_{i=0}^{2n} W_m^{(i)} \mathcal{Z}_{k|k-1}^{(i)} $$
+&lt;p&gt;&lt;strong&gt;计算预测的观测协方差（自协方差）：&lt;/strong&gt;
+同理，加上观测噪声协方差 \(R\)：
+&lt;/p&gt;
+$$P_{zz} = \sum_{i=0}^{2n} W_c^{(i)} \left( \mathcal{Z}_{k|k-1}^{(i)} - \hat{z}_k \right) \left( \mathcal{Z}_{k|k-1}^{(i)} - \hat{z}_k \right)^T + R $$
+&lt;p&gt;&lt;strong&gt;计算状态与观测的交叉协方差：&lt;/strong&gt;
+&lt;/p&gt;
+$$P_{xz} = \sum_{i=0}^{2n} W_c^{(i)} \left( X_{k|k-1}^{(i)} - \hat{x}_{k|k-1} \right) \left( \mathcal{Z}_{k|k-1}^{(i)} - \hat{z}_k \right)^T $$
+&lt;p&gt;&lt;strong&gt;计算卡尔曼增益：&lt;/strong&gt;
+&lt;/p&gt;
+$$K_k = P_{xz} P_{zz}^{-1} $$
+&lt;p&gt;&lt;strong&gt;更新状态均值（后验估计）：&lt;/strong&gt;
+&lt;/p&gt;
+$$\hat{x}_k = \hat{x}_{k|k-1} + K_k \left( z_k - \hat{z}_k \right) $$
+&lt;p&gt;&lt;strong&gt;更新状态协方差（后验协方差）：&lt;/strong&gt;
+&lt;/p&gt;
+$$P_k = P_{k|k-1} - K_k P_{zz} K_k^T $$
+&lt;hr&gt;
+&lt;h3 id=&#34;补充说明非加性噪声情况&#34;&gt;补充说明：非加性噪声情况
+&lt;/h3&gt;&lt;p&gt;前面推导基于 \(x_k = f(x_{k-1}) + w_{k-1}\) 这样的&lt;strong&gt;加性噪声&lt;/strong&gt;。如果噪声是非加性的，即 \(x_k = f(x_{k-1}, w_{k-1})\)，此时需要采用&lt;strong&gt;状态扩维 (Augmented State)&lt;/strong&gt; 的方法：&lt;/p&gt;
+&lt;p&gt;将状态变量、过程噪声、观测噪声合并成一个新的扩维状态向量 \(x^a = [x^T, w^T, v^T]^T\)。设 \(x^a\) 的维度为 \(n_a = n + n_w + n_v\)，然后基于扩维后的状态生成 \(2n_a + 1\) 个 Sigma 点，直接代入复杂的非线性函数中计算，核心算法逻辑保持不变。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h3 id=&#34;补充说明超参数选取&#34;&gt;补充说明：超参数选取
+&lt;/h3&gt;&lt;p&gt;在 Sigma 点的生成公式中，我们看到一个关键的系数 \(\sqrt{n+\lambda}\)。
+其中 \(\lambda\) 是一个复合标量参数，定义为：
+&lt;/p&gt;
+$$\lambda = \alpha^2 (n + \kappa) - n $$
+&lt;p&gt;从这个公式可以看出，Sigma 点距离中心（均值）的“步长”实际上是由 \((n+\lambda)\) 决定的：
+&lt;/p&gt;
+$$n + \lambda = \alpha^2 (n + \kappa) $$
+&lt;p&gt;
+因此，Sigma 点与均值的距离正比于 \(\alpha \sqrt{n+\kappa}\)。&lt;/p&gt;
+&lt;p&gt;我们将 \(\lambda\) 拆解为 \(\alpha\) 和 \(\kappa\) 来详细说明：&lt;/p&gt;
+&lt;h4 id=&#34;主要展布参数-alpha&#34;&gt;主要展布参数 \(\alpha\)
+&lt;/h4&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;作用：&lt;/strong&gt; \(\alpha\) 决定了 Sigma 点围绕均值 \(\bar{x}\) 的&lt;strong&gt;空间分布范围（Spread）&lt;/strong&gt;。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;取值范围：&lt;/strong&gt; 通常取一个非常小的正数，比如 \(10^{-3}\) 或 \(10^{-4}\)，最常取 \(1 \times 10^{-3}\)。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;为什么取极小值？（物理意义）&lt;/strong&gt;
+这是 SUT 最精妙的地方。如果系统方程 \(f(x)\) 或 \(h(x)\) 具有&lt;strong&gt;强烈的非线性&lt;/strong&gt;，当状态维度 \(n\) 很大时，如果没有 \(\alpha\)，Sigma 点 \(\chi^{(i)} = \bar{x} \pm \sqrt{n}P_{xx}\) 会离均值非常远。
+&lt;em&gt;距离太远的 Sigma 点会被代入到非线性函数的“非局部（Non-local）”区域&lt;/em&gt;。这就好比你在用泰勒展开近似一个曲线，却取了离展开点极远的点来算斜率，误差会极大。
+引入 \(\alpha\) 后，\(\alpha \sqrt{n+\kappa}\) 可以&lt;strong&gt;强行把 Sigma 点“拉回”到均值附近极小的局部邻域内&lt;/strong&gt;。这样就能非常精确地捕捉到均值点附近的局部非线性特征，避免采样到无关的全局剧烈波动。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;次级缩放参数-kappa&#34;&gt;次级缩放参数 \(\kappa\)
+&lt;/h4&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;作用：&lt;/strong&gt; \(\kappa\) 是原始无迹变换（UT）中就存在的缩放参数，用于微调 Sigma 点的距离以及中心点的权重。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;取值策略：&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;策略 A：设为 0（最常见）&lt;/strong&gt;。在引入了 \(\alpha\) 的 SUT 中，由于 \(\alpha\) 已经能很好地控制范围，\(\kappa\) 通常直接设为 \(0\) 或 \(3-n\) 以外的正数，以保证计算的稳定性。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;策略 B：设为 \(3-n\)（针对高斯分布的启发式规则）&lt;/strong&gt;。当 \(x\) 服从高斯分布时，选择 \(n+\kappa = 3\) （即 \(\kappa = 3-n\)）可以使无迹变换不仅能完美匹配均值和协方差（一阶、二阶矩），还能部分匹配分布的四阶矩（峰度），从而最小化高斯分布下的截断误差。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;为什么高维时不能只用 \(\kappa\)？&lt;/strong&gt;
+如果状态维度 \(n &gt; 3\)，为了满足 \(n+\kappa = 3\)，\(\kappa\) 必然是一个负数。这会导致中心点的权重 \(W_m^{(0)} = \frac{\kappa}{n+\kappa}\) 变成负数。如果负得太多，计算出的协方差矩阵 \(P_{yy}\) 可能会失去&lt;strong&gt;正定性&lt;/strong&gt;，导致卡尔曼滤波在 Cholesky 分解时直接崩溃。这正是引入 \(\alpha\) 提出 SUT 的根本原因。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;高阶分布参数beta&#34;&gt;高阶分布参数：\(\beta\)
+&lt;/h4&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;作用：&lt;/strong&gt; \(\beta\) 是一个非负的权重参数，&lt;strong&gt;专门且仅用于&lt;/strong&gt;微调协方差计算时中心点（\(\chi^{(0)}\)）的权重 \(W_c^{(0)}\)。它用于合并状态向量 \(x\) 的&lt;strong&gt;先验概率分布信息&lt;/strong&gt;。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;权重公式回顾：&lt;/strong&gt;
+中心点均值权重：\(W_m^{(0)} = \frac{\lambda}{n+\lambda}\)
+中心点协方差权重：\(W_c^{(0)} = \frac{\lambda}{n+\lambda} + (1 - \alpha^2 + \beta)\)
+可以看到，\(W_c^{(0)}\) 比 \(W_m^{(0)}\) 多出了一个修正项 \((1 - \alpha^2 + \beta)\)。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;物理意义与泰勒展开的联系：&lt;/strong&gt;
+在对非线性函数 \(y = g(x)\) 计算协方差 \(P_{yy}\) 时，如果展开它的泰勒级数，会发现四阶矩（高阶截断项）对协方差的计算精度有显著影响。
+参数 \(\beta\) 的引入就是为了补偿泰勒展开中的四阶项误差。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;最优取值：&lt;/strong&gt; \(\beta = 2\)
+如果已知状态变量 \(x\) 严格（或近似）服从&lt;strong&gt;高斯分布&lt;/strong&gt;，数学推导证明 \(\beta = 2\) 是理论上的最优解。
+当 \(\beta = 2\) 时，由 \((1 - \alpha^2 + 2)\) 产生的补偿项，恰好能够抵消高斯分布在 SUT 变换中的四阶泰勒展开误差，从而使协方差的估计精度达到三阶完全准确，四阶误差最小。
+如果是非高斯分布，比如均匀分布或学生-t 分布，\(\beta\) 的最优值会有所不同（需根据分布的峰度 Kurtosis 来推算），但在大多数工程实践中，假设噪声为高斯白噪声，因此直接无脑设定 \(\beta = 2\)。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;把典型的参数（如 \(n=5, \alpha=10^{-3}, \kappa=0, \beta=2\)）代入权重公式时，发现：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;\(\lambda = (10^{-3})^2 \times 5 - 5 \approx -5\)&lt;/li&gt;
+&lt;li&gt;\(n+\lambda = 5 \times 10^{-6}\)&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;中心点均值权重：&lt;/strong&gt; \(W_m^{(0)} = \frac{-5}{5 \times 10^{-6}} = -10^6\) &lt;strong&gt;（一个极大的负数）&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;外围点均值权重：&lt;/strong&gt; \(W_m^{(i)} = \frac{1}{2 \times 5 \times 10^{-6}} = 10^5\) &lt;strong&gt;（极大的正数）&lt;/strong&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;strong&gt;为什么会出现极大的正负权重？&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;几何视角：&lt;/strong&gt; 外围的 2n 个 Sigma 点因为 \(\alpha\) 极小，被挤压在距离中心极近的地方（捕获局部非线性）。但是，为了让这组点在统计上仍然具有与原始分布相同的协方差 \(P_{xx}\)，我们必须赋予外围点极大的正权重。同时，为了保证所有权重的和为 1（\(\sum W_m = 1\)），中心点的权重就必须变成一个极大的负数。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;代数抵消：&lt;/strong&gt; 在计算 \(\hat{y} = \sum W_m^{(i)} y^{(i)}\) 时，极大正权重和极大负权重相乘后求和，实际上是在进行类似于&lt;strong&gt;有限差分法求导&lt;/strong&gt;的过程。这也就从侧面解释了为什么 UKF 可以在不显式求解雅可比矩阵的情况下，隐式地达到二阶甚至更高的泰勒展开精度。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;在实际编写 UKF 代码（如 C++ 或 Python）时，通常遵循以下原则即可获得稳定的滤波表现：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;\(\alpha\) &lt;strong&gt;（控制局部性）：&lt;/strong&gt; 默认设置为 \(1e^{-3}\)。如果系统非线性极强，且状态估计容易发散，可以尝试调小到 \(1e^{-4}\)。&lt;/li&gt;
+&lt;li&gt;\(\kappa\) &lt;strong&gt;（基础缩放）：&lt;/strong&gt; 默认设置为 \(0\)。这能保证 \(\lambda\) 和权重的计算最简化且最稳定。&lt;/li&gt;
+&lt;li&gt;\(\beta\) &lt;strong&gt;（分布补偿）：&lt;/strong&gt; 默认设置为 \(2\)。绝大多数卡尔曼滤波场景都基于高斯假设。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;组合导航案例分析&#34;&gt;组合导航案例分析
+&lt;/h2&gt;&lt;h3 id=&#34;核心概念与系统建模&#34;&gt;核心概念与系统建模
+&lt;/h3&gt;&lt;h4 id=&#34;为什么需要融合&#34;&gt;为什么需要融合？
+&lt;/h4&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;INS（惯性导航）：&lt;/strong&gt; 高频（100-1000Hz），短期精度极高，完全自主。但存在零偏，积分运算会导致误差随时间呈多项式级爆炸（位置漂移）。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;GPS（全球定位）：&lt;/strong&gt; 低频（1-10Hz），长期精度高，误差不累加。但在城市峡谷易受干扰，存在多路径效应。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;融合策略：&lt;/strong&gt; 利用 INS 填补 GPS 频率间的空白，利用 GPS 限制 INS 的长期发散，并实时估计（在线标定）INS 的零偏。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;状态向量的定义&#34;&gt;状态向量的定义
+&lt;/h4&gt;&lt;p&gt;系统不直接估计全量状态，而是关注以下 15 维核心状态。特别地，必须将 IMU 零偏作为状态量进行实时估计。&lt;/p&gt;
+$$x =[r^T, v^T, \psi^T, b_a^T, b_g^T]^T $$
+&lt;ul&gt;
+&lt;li&gt;\(r \in \mathbb{R}^3\)：位置 (Position)&lt;/li&gt;
+&lt;li&gt;\(v \in \mathbb{R}^3\)：速度 (Velocity)&lt;/li&gt;
+&lt;li&gt;\(\psi \in \mathbb{R}^3\)：姿态角 (滚转、俯仰、偏航)&lt;/li&gt;
+&lt;li&gt;\(b_a \in \mathbb{R}^3\)：&lt;strong&gt;加速度计零偏&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;\(b_g \in \mathbb{R}^3\)：&lt;strong&gt;陀螺仪零偏&lt;/strong&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;为什么必须估计零偏？&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;加速度计零偏灾难：&lt;/strong&gt; 哪怕存在极微小的常值误差 \(b_a\)，经过两次积分后，位置误差会呈平方级增长：\(\Delta r = \frac{1}{2} b_a t^2\)。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;陀螺仪零偏灾难：&lt;/strong&gt; 陀螺仪的微小零偏 \(b_g\) 会导致姿态角产生 \(\Delta \psi = b_g t\) 的误差。这会使重力矢量 \(g\) 被错误投影到水平方向，产生额外的水平加速度误差，再经过两次积分，导致位置误差呈立方级（\(t^3\)）爆炸。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;建模方法：&lt;/strong&gt; 零偏不仅随开机变化，还随温度漂移。工程上采用&lt;strong&gt;一阶高斯-马尔可夫过程&lt;/strong&gt;建模：
+$$\dot{b} = -\frac{1}{\tau}b + w $$
+（即在白噪声 \(w\) 驱动下，受时间常数 \(\tau\) 约束，缓慢变化的随机过程）。&lt;/li&gt;
+&lt;li&gt;通过这种操作，系统模型里的所有残留噪声都变成了纯白噪声，卡尔曼滤波的数学假设再次成立。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;h3 id=&#34;误差状态&#34;&gt;误差状态
+&lt;/h3&gt;&lt;p&gt;在 ESKF 体系中，存在三种状态物理量：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;真实状态 (\(x_{true}\))&lt;/strong&gt;：客观现实，无法绝对获知。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;名义状态 (\(x_{nom}\))&lt;/strong&gt;：仅依靠 IMU 测量值无脑积分得到的状态，不考虑噪声。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;误差状态 (\(\delta x\))&lt;/strong&gt;：两者的差值。即 &lt;strong&gt;真实状态 = 名义状态 \(\oplus\) 误差状态&lt;/strong&gt;。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;hr&gt;
+&lt;h3 id=&#34;eskf-完整卡尔曼滤波推导与流程&#34;&gt;ESKF 完整卡尔曼滤波推导与流程
+&lt;/h3&gt;&lt;p&gt;算法分为“高频预测”、“低频更新”、“状态注入与重置”三个主要阶段。&lt;/p&gt;
+&lt;h4 id=&#34;阶段一imu-高频更新&#34;&gt;阶段一：IMU 高频更新
+&lt;/h4&gt;&lt;p&gt;当新的 IMU 数据（加速度 \(a_m\)、角速度 \(\omega_m\)）到来时：&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;更新名义状态：&lt;/strong&gt;
+&lt;/p&gt;
+$$\dot{r}_{nom} = v_{nom} $$
+$$\dot{v}_{nom} = C_b^n(a_m - b_{a,nom}) + g $$
+$$\dot{\psi}_{nom} = \Omega (\omega_m - b_{g,nom}) $$
+$$\dot{b}_{a,nom} = -\frac{1}{\tau_a}b_{a,nom}$$
+$$\dot{b}_{g,nom} = -\frac{1}{\tau_g}b_{g,nom}$$
+&lt;p&gt;&lt;strong&gt;误差状态先验预测：&lt;/strong&gt;
+因为每次更新后 \(\delta x\) 都会被清零，所以它的先验期望永远是 0：
+&lt;/p&gt;
+$$\delta x_{k|k-1} = 0 $$
+&lt;p&gt;&lt;strong&gt;误差协方差传播：&lt;/strong&gt;
+&lt;/p&gt;
+$$P_{k|k-1} = F_k P_{k-1} F_k^T + Q_k $$
+&lt;ul&gt;
+&lt;li&gt;\(F_k\) 是误差状态连续系统雅可比矩阵离散化后的状态转移矩阵。&lt;/li&gt;
+&lt;li&gt;\(Q_k\) 是 IMU 噪声（过程噪声）的协方差矩阵。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;em&gt;(此步骤意味着：虽然我们认为当前的误差期望是0，但随着不断盲目积分，系统的不确定性 \(P\) 正在迅速膨胀)。&lt;/em&gt;&lt;/p&gt;
+&lt;h4 id=&#34;阶段二gps-低频触发&#34;&gt;阶段二：GPS 低频触发
+&lt;/h4&gt;&lt;p&gt;当可靠的 GPS 数据 \(y_{GPS}\) 到来时，卡尔曼滤波介入以计算真实的误差状态。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;计算观测创新（残差）：&lt;/strong&gt;
+&lt;/p&gt;
+$$e_k = y_{GPS} - H_k x_{nom} $$
+&lt;p&gt;
+&lt;em&gt;(实际的 GPS 观测与依靠 IMU 积分预估的位置速度之间的差异)&lt;/em&gt;。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;计算创新协方差与卡尔曼增益：&lt;/strong&gt;
+&lt;/p&gt;
+$$S_k = H_k P_{k|k-1} H_k^T + R_k $$
+$$K_k = P_{k|k-1} H_k^T S_k^{-1} $$
+&lt;ul&gt;
+&lt;li&gt;\(H_k\)：观测雅可比矩阵（将15维误差状态映射到 GPS 的观测空间）。&lt;/li&gt;
+&lt;li&gt;\(R_k\)：GPS 测量的噪声协方差矩阵。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;计算误差状态的后验估计：&lt;/strong&gt;
+&lt;/p&gt;
+$$\delta \hat{x}_k = K_k e_k $$
+&lt;p&gt;
+&lt;em&gt;(通过卡尔曼滤波，终于反推算出了这段时间内累积的零偏漂移和位姿误差)&lt;/em&gt;。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;4更新协方差矩阵：&lt;/strong&gt;
+&lt;/p&gt;
+$$P_k = (I - K_k H_k) P_{k|k-1} $$
+&lt;h4 id=&#34;阶段三状态注入与重置&#34;&gt;阶段三：状态注入与重置
+&lt;/h4&gt;&lt;p&gt;算出了误差状态 \(\delta \hat{x}_k\) 后，需要立刻将其补偿给名义状态。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;状态注入：&lt;/strong&gt;
+&lt;/p&gt;
+$$r_{new} = r_{nom} + \delta r $$
+$$v_{new} = v_{nom} + \delta v $$
+$$\psi_{new} = \psi_{nom} + \delta \psi$$
+$$b_{a,new} = b_{a,nom} + \delta b_a $$
+$$b_{g,new} = b_{g,nom} + \delta b_g $$
+&lt;p&gt;&lt;strong&gt;误差状态清零（Reset）：&lt;/strong&gt;
+名义状态已成为最准确的估计，因此将滤波器内部的误差状态清零，等待下一轮循环：
+&lt;/p&gt;
+$$\delta \hat{x}_k \leftarrow 0 $$
+&lt;hr&gt;
+&lt;h3 id=&#34;核心工程实践细节&#34;&gt;核心工程实践细节
+&lt;/h3&gt;&lt;h4 id=&#34;41-时间同步&#34;&gt;4.1 时间同步
+&lt;/h4&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;痛点：&lt;/strong&gt; 哪怕 GPS 和 IMU 时间戳相差仅 10ms，在 120km/h 车速下也会产生 0.33 米的物理偏差。这个偏差会被滤波器误认为是 IMU 的零偏，导致系统在反向补偿时彻底跑飞。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;解法：&lt;/strong&gt; 必须使用硬件级 PPS（秒脉冲信号）硬中断，将 GPS 和 IMU 锁存对齐，达到微秒（\(\mu s\)）级同步。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;42-野值检测马氏距离&#34;&gt;4.2 野值检测：马氏距离
+&lt;/h4&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;痛点：&lt;/strong&gt; 偶尔收到的离谱 GPS 信号（如多路径反射）。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;解法：&lt;/strong&gt; 使用预测的创新协方差 \(S_k\) 作为“动态信任椭球”。
+$$d^2 = e_k^T S_k^{-1} e_k $$
+若马氏距离 \(d^2 &gt; \chi^2_{\text{threshold}}\)，说明该 GPS 测量值超出了物理规律（IMU 认为不可能一秒钟瞬移这么远），直接丢弃该帧 GPS 数据。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;43-动态噪声调节自适应滤波&#34;&gt;4.3 动态噪声调节：自适应滤波
+&lt;/h4&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;痛点：&lt;/strong&gt; GPS 质量受环境影响剧烈，固定的观测噪声 \(R\) 无法应对开阔地（信号极好）到林荫道（信号极差）的切换。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;解法：&lt;/strong&gt; 利用残差序列在线动态估计瞬时 \(R\) 矩阵，采用指数滑动平均平滑更新：
+$$\hat{R}_k = \alpha \hat{R}_{k-1} + (1-\alpha)(e_k e_k^T - H P_{k|k-1} H^T) $$
+当驶入恶劣环境，瞬时残差 \(e_k\) 变大，\(R\) 自动增大，卡尔曼增益 \(K\) 减小，系统自动降低对 GPS 的信任度。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;44-零速修正技术&#34;&gt;4.4 零速修正技术
+&lt;/h4&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;痛点：&lt;/strong&gt; 车辆停在红绿灯 3 分钟，GPS 存在静态漂移，会干扰系统。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;解法：&lt;/strong&gt; 结合轮速计或 IMU 静态检测。一旦判定车辆彻底静止，向滤波器强制注入高精度的虚拟观测 \([v_x, v_y, v_z] = [0, 0, 0]\)。这相当于定海神针，滤波器能利用这段停车时间，极其精确地反向标定收敛 \(b_a\) 和 \(b_g\) 零偏！&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;45-多路径检测&#34;&gt;4.5 多路径检测
+&lt;/h4&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;解法：&lt;/strong&gt; 除了马氏距离，还需要深入信号底层。利用卫星的&lt;strong&gt;载噪比 (C/N0)&lt;/strong&gt; 降低弱信号权重，设置&lt;strong&gt;仰角掩码 (Elevation Mask)&lt;/strong&gt; 屏蔽低角度卫星，并通过接收机 RAIM 算法交叉比对不同卫星组的解算结果，剔除被建筑物反射的“说谎”卫星。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;46-用四元数和旋转矢量替换欧拉角可以简化问题并避免万向节死锁&#34;&gt;4.6 用四元数和旋转矢量替换欧拉角可以简化问题并避免万向节死锁
+&lt;/h4&gt;&lt;hr&gt;
+&lt;h1 id=&#34;附&#34;&gt;附
+&lt;/h1&gt;&lt;ul&gt;
+&lt;li&gt;确定性系统视角下的卡尔曼滤波：https://zhuanlan.zhihu.com/p/42390886&lt;/li&gt;
+&lt;li&gt;卡尔曼滤波、贝叶斯滤波 Python 代码示例教程：https://github.com/rlabbe/Kalman-and-Bayesian-Filters-in-Python&lt;/li&gt;
+&lt;li&gt;非线性观测器概况：https://www.zhihu.com/question/28360083/answer/262859807&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;个人思考：
+随机系统视角证明了高斯白噪声情况下，卡尔曼滤波是线性最小方差无偏估计器。确定系统视角分析了系统将卡尔曼滤波作为观测器时对有界扰动是输入到状态稳定的。如果是LTI系统的话，Kalman Observer与 Luenberger Oberser是一样的，除了反馈设计中观测器增益的计算上不同，后者通常会用极点配置技术，而前者用Lyapunov的渐进稳定性来得到的K(t)。&lt;/p&gt;
+</description>
+        </item>
+        <item>
         <title>自动驾驶车辆实验平台控制系统设计</title>
         <link>https://zouzhenshan.github.io/p/autonomous-vehicle-experiment-platform-control-system-design/</link>
         <pubDate>Thu, 13 Aug 2026 00:00:00 +0000</pubDate>

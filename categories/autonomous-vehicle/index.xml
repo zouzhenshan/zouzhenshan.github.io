@@ -558,7 +558,7 @@ $$
 		data-flex-basis=&#34;681px&#34;
 	
 &gt;&lt;/p&gt;
-&lt;p&gt;&lt;em&gt;论文 Fig. 3。外环路径跟踪控制器输出期望横摆角速度，内环非线性控制器与扩张状态观测器构成扰动估计和补偿闭环。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;外环路径跟踪控制器输出期望横摆角速度，内环非线性控制器与扩张状态观测器构成扰动估计和补偿闭环。&lt;/em&gt;&lt;/p&gt;
 &lt;h3 id=&#34;stability-and-feasibility-results-3&#34;&gt;Stability and Feasibility Results
 &lt;/h3&gt;&lt;p&gt;外环以横向误差能量作为 Lyapunov 函数，给定正的 $c_1,c_2$ 后，其导数为负，横向误差收敛到零。内环则把横摆误差与 ESO 估计误差合并进 Lyapunov 函数。只要控制增益与正定矩阵满足论文给出的矩阵不等式，复合 Lyapunov 函数满足有限时间稳定条件，横摆角速度误差和观测误差在有限时间内到达原点。对实际车辆而言，这一结论说明扰动不会被留在缓慢收敛的尾部，而会在参数条件成立时被快速压缩。&lt;/p&gt;
 </description>

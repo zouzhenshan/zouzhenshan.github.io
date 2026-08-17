@@ -7,7 +7,7 @@
         <generator>Hugo -- gohugo.io</generator>
         <language>zh-cn</language>
         <copyright>zzs</copyright>
-        <lastBuildDate>Thu, 13 Aug 2026 00:00:00 +0000</lastBuildDate><atom:link href="https://zouzhenshan.github.io/post/index.xml" rel="self" type="application/rss+xml" /><item>
+        <lastBuildDate>Mon, 17 Aug 2026 00:00:00 +0000</lastBuildDate><atom:link href="https://zouzhenshan.github.io/post/index.xml" rel="self" type="application/rss+xml" /><item>
         <title>Unitree G1 人形机器人 AMP-MoE 多技能运动控制</title>
         <link>https://zouzhenshan.github.io/p/unitree-g1-amp-moe-multiskill/</link>
         <pubDate>Wed, 12 Aug 2026 00:00:00 +0000</pubDate>
@@ -468,6 +468,308 @@ sequenceDiagram
 &lt;h2 id=&#34;小结&#34;&gt;小结
 &lt;/h2&gt;&lt;p&gt;本文设计的控制系统将节点、模型、参数、算法和线程边界分离。&lt;code&gt;ControllerNode&lt;/code&gt; 保留 ROS2 接口职责，工厂负责模块创建，参数管理服务负责统一配置读取，车辆模型作为共享依赖注入估计器和控制器，预处理与后处理管道分别承担输入标准化和执行命令约束。&lt;/p&gt;
 &lt;p&gt;线程模型同样采用分层思想。异步网络层负责消息接收，状态管理层负责快照生成，强实时控制回路只在周期入口读取数据，并在本地完成一次完整控制计算。该设计能够支持多人开发、多算法频繁切换和可复现实验，也为后续引入更复杂的车辆模型、估计器和优化控制器保留扩展空间。&lt;/p&gt;
+</description>
+        </item>
+        <item>
+        <title>模型预测控制理论与车辆控制应用研究成果</title>
+        <link>https://zouzhenshan.github.io/p/mpc-theory-and-vehicle-control-research-results/</link>
+        <pubDate>Mon, 17 Aug 2026 00:00:00 +0000</pubDate>
+        
+        <guid>https://zouzhenshan.github.io/p/mpc-theory-and-vehicle-control-research-results/</guid>
+        <description>&lt;p&gt;现两篇工作已发表见刊：&lt;/p&gt;
+&lt;p&gt;H. Yang, Z. Zou, Y. Xia and P. Li, &amp;ldquo;Artificial Reference-Based Terminal-Free NMPC for Autonomous Parking Among Irregularly Placed Vehicles,&amp;rdquo; in &lt;em&gt;IEEE Transactions on Automation Science and Engineering&lt;/em&gt;, vol. 23, pp. 7474-7484, 2026.&lt;/p&gt;
+&lt;p&gt;Z. Zou, X. Liu, J. Yan, H. Yang and P. Li, &amp;ldquo;Double-Loop Finite-Time Disturbance Rejection Control with Nonlinear ESO for Autonomous Parking,&amp;rdquo; &lt;em&gt;2025 9th CAA International Conference on Vehicular Control and Intelligence (CVCI)&lt;/em&gt;, Qingdao, China, 2025, pp. 1-6.&lt;/p&gt;
+&lt;h2 id=&#34;artificial-reference-based-terminal-free-nmpc-for-autonomous-parking-among-irregularly-placed-vehicles&#34;&gt;Artificial reference-based terminal-free NMPC for autonomous parking among irregularly placed vehicles
+&lt;/h2&gt;&lt;h3 id=&#34;abstract&#34;&gt;Abstract
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;p&gt;In this paper, an artificial reference-based terminal-free nonlinear model predictive control (NMPC) strategy is proposed for autonomous parking in constrained scenarios. Artificial References are introduced as additional decision variables in terminal-free NMPC to effectively integrate local planning and motion control. Both a terminal constraint and a terminal cost are removed in terminal-free NMPC to improve practical feasibility. Smooth and differentiable collision avoidance constraints are employed to ensure safety in irregularly confined environments. Stability and recursive feasibility are analyzed through a sufficiently large prediction horizon and forward invariant set theory. Experiment results demonstrate effectiveness and superiority of the proposed artificial reference-based terminal-free NMPC strategy for autonomous parking among irregularly placed vehicles.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h3 id=&#34;main-contributions&#34;&gt;Main Contributions
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;Artificial reference variables and collision avoidance constraints are incorporated into MPC to integrate local planning and motion control.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;NMPC without terminal costs or terminal constraints is designed to reduce computational demand and enhance solvability in implementation.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Stability and recursive feasibility are analyzed by selecting proper prediction horizon and establishing forward invariant set in the NMPC.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/blockquote&gt;
+&lt;h3 id=&#34;research-methodology&#34;&gt;Research Methodology
+&lt;/h3&gt;&lt;p&gt;邻车越界后，车位不再是规则矩形，Hybrid A star 生成的带有曲率突变的粗路径可能存在车辆在当前动力学与安全距离下到不了的位置。针对这类“参考轨迹不可达”问题，本文基于Artificial Reference MPC框架涉及控制器，将局部规划与控制统一。真实车辆状态 $x$ 和输入 $u$ 跟随人工参考 $(x_A,u_A)$，人工参考再尽量贴近原始规划参考 $(x_r,u_r)$。&lt;/p&gt;
+$$
+\begin{aligned}
+\min_{x,u,x_A,u_A,\mu,\nu}\quad
+J_N = &amp;\sum_{j=0}^{N-1}\left(\lVert x_A(j|k)-x(j|k)\rVert_Q^2
++\lVert u_A(j|k)-u(j|k)\rVert_S^2\right)\\
+&amp;+\sum_{j=0}^{N-1}\left(\lVert x_r(j|k)-x_A(j|k)\rVert_P^2
++\lVert u_r(j|k)-u_A(j|k)\rVert_H^2\right)\\
+\text{s.t.}\quad &amp;x(k|k)=x(k),\qquad x_A(k|k)=x_A(k),\\
+&amp;x(k+j+1|k)=f\bigl(x(k+j|k),u(k+j|k)\bigr),\\
+&amp;x_A(k+j+1|k)=f\bigl(x_A(k+j|k),u_A(k+j|k)\bigr),\\
+&amp;u(k+j|k)\in U,\qquad u_A(k+j|k)\in U_A,\\
+&amp;-b_O^\mathsf{T}\mu_i(k)+\bigl(A_i\iota(x(k))-b_i\bigr)^\mathsf{T}\nu_i(k)\ge d_{\min},\\
+&amp;A_O^\mathsf{T}\mu_i(k)+R^\mathsf{T}(x(k))A_i^\mathsf{T}\nu_i(k)=0,\\
+&amp;\lVert A_i^\mathsf{T}\nu_i(k)\rVert\le1,\qquad \nu_i(k)\ge0,\qquad \mu_i(k)\ge0,\\
+&amp;j=1,\ldots,N,\qquad i=1,\ldots,I.
+\end{aligned}
+$$
+&lt;p&gt;$B(x)=R(x)B_O+\iota(x)$ 表示车辆矩形经过旋转和平移后的占用集合，$O_i={y\mid A_i y\le b_i}$ 表示第 $i$ 个凸障碍物，$\mu_i,\nu_i$ 是用于将非光滑集合不相交条件转化为光滑约束的对偶变量。人工参考不是在优化前固定生成，它与控制序列一起在每个采样时刻重新求解。这样，车辆不必死跟一条局部不可达的路线，而是在原始路线、车辆动力学和障碍物安全距离之间寻找可行折中。最后，在保证可行性与稳定性前提下，移除了传统 MPC 中难以离线设计的终端代价与终端约束，缓解求解失败问题。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://zouzhenshan.github.io/p/mpc-theory-and-vehicle-control-research-results/figure-terminal-free-nmpc.jpg&#34;
+	width=&#34;1202&#34;
+	height=&#34;1179&#34;
+	srcset=&#34;https://zouzhenshan.github.io/p/mpc-theory-and-vehicle-control-research-results/figure-terminal-free-nmpc_hu6a35068cf4b87a39fe0998c255880877_146017_480x0_resize_q75_box.jpg 480w, https://zouzhenshan.github.io/p/mpc-theory-and-vehicle-control-research-results/figure-terminal-free-nmpc_hu6a35068cf4b87a39fe0998c255880877_146017_1024x0_resize_q75_box.jpg 1024w&#34;
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;自主泊车流程原图&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;101&#34;
+		data-flex-basis=&#34;244px&#34;
+	
+&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;环境信息首先提供障碍物位置，Hybrid A star 生成粗全局轨迹，人工参考终端自由 NMPC 在此基础上联合完成局部规划与运动控制。&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;stability-and-feasibility-results&#34;&gt;Stability and Feasibility Results
+&lt;/h3&gt;&lt;p&gt;论文用最优代价减去人工参考到原始参考的最小代价构造 Lyapunov 函数。对足够长的预测域，代价沿闭环轨迹下降，实际状态渐近收敛到最优可达人工参考附近。可行性证明依赖两个要点。其一，人工参考本身在每一步都是受同一动力学和输入约束限制的决策序列。其二，在正向不变集的一个局部邻域内存在可行局部控制律。由此可把当前可行解移位为下一时刻的候选解，得到递归可行性。这里的稳定目标是收敛到可达人工参考，而非强行收敛到可能不可达的粗规划轨迹。&lt;/p&gt;
+&lt;h2 id=&#34;elastic-tube-mpc-for-intelligent-connected-vehicles-in-a-cloud-edge-collaborative-framework-with-delay-compensation&#34;&gt;Elastic tube MPC for intelligent connected vehicles in a cloud-edge collaborative framework with delay compensation
+&lt;/h2&gt;&lt;h3 id=&#34;abstract-1&#34;&gt;Abstract
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;p&gt;In this paper, an elastic tube model predictive control strategy is proposed in a cloud-edge collaborative framework for an intelligent connected vehicle under communication delays. A cloud-edge collaborative control task is decoupled into computationally intensive model predictive control in a cloud side and lightweight feedback control in a vehicle side. The communication delays are estimated in the cloud side and compensated by time-stamp matching and local feedback in the vehicle side. Online elastic tubes are constructed based on generator representation of zonotopes with a real-time order reduction method. An elastic tube scaling factor is introduced as an optimization variable to reduce tube conservatism along the prediction horizon in model predictive control. Input-to-state stability and recursive feasibility are analyzed through a sufficiently large prediction horizon and a tube contraction technology. Experiment results demonstrate effectiveness of the elastic tube model predictive control for the intelligent connected vehicle in a cloud-edge collaborative framework.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h3 id=&#34;main-contributions-1&#34;&gt;Main Contributions
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;Bidirectional delays are handled by cloud-side estimation and vehicle-side compensation in a cloud-edge collaborative framework using elastic tube MPC.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Zonotope-based RPI set generation and elastic tube optimization are introduced into the tube MPC for computational feasibility and control performance.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;A tube contraction technology and a prediction horizon lower bound are utilized to analyze input-to-state stability and recursive feasibility for the elastic tube MPC.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/blockquote&gt;
+&lt;h3 id=&#34;research-methodology-1&#34;&gt;Research Methodology
+&lt;/h3&gt;&lt;p&gt;云端适合求解计算量更大的 NMPC，但车端接收到的控制序列可能已经落后于真实时刻。若车辆直接执行序列首项，上传时延导致的状态预测偏差与下传时延会共同破坏约束满足。本文把误差视为有界扰动，并以可缩放的鲁棒正不变集 $Z_{\mathrm{base}}$ 包住名义轨迹。缩放因子 $s_j$ 被纳入在线优化，形成随预测域收缩或放大的弹性管。&lt;/p&gt;
+&lt;p&gt;车辆端的局部反馈先围绕下传时延匹配到的名义状态定义误差&lt;/p&gt;
+$$
+\tilde e(k)=x(k)-\bar x\bigl(\tau_d(k_r)\mid k_r\bigr).
+$$
+&lt;p&gt;在该工作点线性化后，车端求解无限时域 LQR&lt;/p&gt;
+$$
+\begin{aligned}
+\min_{\tilde e,\tilde u}\quad J_{\mathrm{LQR}}
+=&amp;\sum_{i=0}^{\infty}\left(\lVert\tilde e(i|k)\rVert_Q^2+\lVert\tilde u(i|k)\rVert_R^2\right)\\
+\text{s.t.}\quad &amp;\tilde e(0|k)=\tilde e(k), \\
+&amp;\tilde e(i+1|k)=A_l(k)\tilde e(i|k)+B_l(k)\tilde u(i|k).
+\end{aligned}
+$$
+&lt;p&gt;对应的 DARE 与反馈增益为&lt;/p&gt;
+$$
+\begin{aligned}
+P={}&amp;-A_l^\mathsf{T}PB_l\bigl(R+B_l^\mathsf{T}PB_l\bigr)^{-1}B_l^\mathsf{T}PA_l
++A_l^\mathsf{T}PA_l+Q,\\
+K(k)={}&amp;-\bigl(R+B_l^\mathsf{T}(k)PB_l(k)\bigr)^{-1}B_l^\mathsf{T}(k)PA_l(k),\\
+\tilde e(k+1)={}&amp;A_K(k)\tilde e(k)+d(k),\qquad A_K(k)=A_l(k)+B_l(k)K(k).
+\end{aligned}
+$$
+&lt;p&gt;其中 $d(k)$ 包含线性化高阶残差、通信时延影响和外部扰动，论文用 $\lVert d(k)\rVert\le C_w(k)\lVert\tilde e(k)\rVert^2$ 给出界。RPI 集采用 zonotope 的生成元表示&lt;/p&gt;
+$$
+Z=\langle c,G\rangle=\left\{c+G\xi\ \middle|\ \lVert\xi\rVert_\infty\le1\right\}.
+$$
+&lt;p&gt;从 $Z_0=\langle0,0\rangle$ 出发，论文在云端按以下迭代计算状态相关扰动下的基形 RPI 集&lt;/p&gt;
+$$
+\begin{aligned}
+Z_{m+1}&amp;=A_K(k)Z_m\oplus D_m,\\
+W_m&amp;=\langle0,G_w^{(m)}\rangle,\\
+G_w^{(m)}&amp;=\delta_{\max}^{(m)}I_{n_x},\\
+G_{m+1}&amp;=\left[A_K(k)G_m\ \ G_w^{(m)}\right],\\
+\delta_{\max}^{(m)}&amp;=C_w(k)\left(\sum_{i=1}^{n_g^{(m)}}\lVert g_{m,i}\rVert_2\right)^2.
+\end{aligned}
+$$
+&lt;p&gt;这里 $g_{m,i}$ 是 $G_m$ 的第 $i$ 个生成元。线性变换对应矩阵乘法，Minkowski 和对应生成元矩阵拼接，因此无需做高复杂度的多面体交和求和。当 $G_{m+1}$ 的列数超过阈值 $n_{\max}$ 时，论文按 $\ell_2$ 范数从大到小保留主生成元，并把其余生成元的绝对值按坐标压缩到对角生成元中&lt;/p&gt;
+$$
+G_{m+1}\leftarrow
+\left[g_1,\ldots,g_{n_{\max}-n_x},\
+\operatorname{diag}\left(\sum_{j&gt;n_{\max}-n_x}|g_{j,i}|\right)\right].
+$$
+&lt;p&gt;迭代在 $\left|\delta_{\max}^{(m)}-\delta_{\max}^{(m-1)}\right|&amp;lt;\epsilon_{\mathrm{th}}$ 或达到 $M_{\max}$ 时停止，并输出 $Z_{\mathrm{base}}=\langle0,G_{\mathrm{final}}\rangle$。这个计算过程将 RPI 集构造从离线多面体运算变为可在线执行的代数矩阵运算。&lt;/p&gt;
+$$
+\begin{aligned}
+\min_{\bar X,\bar U,S}\quad
+J=&amp;\sum_{j=0}^{N-1}\left(\lVert\bar x_j-x_{d,j}\rVert_{\bar Q}^2+
+\lVert\bar u_j-u_{d,j}\rVert_{\bar R}^2\right)
++\lVert\bar x_N-x_{d,N}\rVert_{\bar P}^2+\sum_{j=0}^{N}\eta s_j^2\\
+\text{s.t.}\quad &amp;\hat x_0-\bar x_0\in s_0Z_{\mathrm{base}},\quad
+\bar x_{j+1}=f(\bar x_j,\bar u_j),\\
+&amp;s_{j+1}=\rho s_j+w_{\max},\quad 0\le s_j\le s_{\max},\\
+&amp;\bar x_j\in X\ominus s_jZ_{\mathrm{base}},\quad
+\bar u_j\in U\ominus K(s_jZ_{\mathrm{base}}),\quad \bar x_N\in X_f.
+\end{aligned}
+$$
+&lt;p&gt;云端发送名义序列，车辆端按时间戳取出与当前时刻对应的一项，并叠加由上述 DARE 构造的本地反馈&lt;/p&gt;
+$$
+u(k)=\bar u\bigl(\tau_d(k_r)\mid k_r\bigr)+K(k)\tilde e(k).
+$$
+&lt;p&gt;时间戳匹配避免执行过期首项，局部 LQR 将实际状态拉回名义轨迹周围的弹性管内。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://zouzhenshan.github.io/p/mpc-theory-and-vehicle-control-research-results/figure-elastic-tube-mpc.png&#34;
+	width=&#34;1262&#34;
+	height=&#34;1008&#34;
+	srcset=&#34;https://zouzhenshan.github.io/p/mpc-theory-and-vehicle-control-research-results/figure-elastic-tube-mpc_hud6dbe53df47f6d2f928f850c7aa0252e_143420_480x0_resize_box_3.png 480w, https://zouzhenshan.github.io/p/mpc-theory-and-vehicle-control-research-results/figure-elastic-tube-mpc_hud6dbe53df47f6d2f928f850c7aa0252e_143420_1024x0_resize_box_3.png 1024w&#34;
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;车云协同弹性管 MPC 原图&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;125&#34;
+		data-flex-basis=&#34;300px&#34;
+	
+&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;云端负责 NMPC、时延补偿与 RPI 集计算，车辆端保存预测状态和本地状态，并通过局部 LQR 与底层控制器完成闭环执行。&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;stability-and-feasibility-results-1&#34;&gt;Stability and Feasibility Results
+&lt;/h3&gt;&lt;p&gt;递归可行性的前提是初始时刻的优化问题可行，预测域满足 $N&amp;gt;\bar\tau_u+\bar\tau_d$。论文将当前最优序列移位，末端接入局部终端控制器。由于终端集 $X_f$ 在该控制器下保持不变，移位后的候选序列仍满足收紧后的状态和输入约束，因此下一时刻仍有可行解。这个条件还有一个直接工程含义，预测域必须覆盖最坏的上传和下传时延，否则车端或云端会访问到序列之外的控制点。&lt;/p&gt;
+&lt;p&gt;稳定性结论针对时变时延下的闭环系统。若 $\bar Q,\bar R,\bar P$ 正定，局部误差动力学满足 $\rho=\lVert A_K\rVert&amp;lt;1$，弹性管尺度收敛到 $s_\infty=w_{\max}/(1-\rho)$。最优代价在参考轨迹邻域之外严格下降，实际误差始终留在对应的 RPI 管内，闭环系统因此满足输入到状态稳定性。该保证给出由扰动上界决定的误差界，闭环误差最终进入一个可计算的有界邻域。&lt;/p&gt;
+&lt;h2 id=&#34;ekf-based-offset-free-nmpc-with-joint-controller-estimator-robust-stability-for-autonomous-vehicles-under-model-mismatch&#34;&gt;EKF-based offset-free NMPC with joint controller-estimator robust stability for autonomous vehicles under model mismatch
+&lt;/h2&gt;&lt;h3 id=&#34;abstract-2&#34;&gt;Abstract
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;p&gt;This paper proposes an EKF-based offset-free nonlinear model predictive control method for autonomous vehicles under kinematic model mismatch. The vehicle&amp;rsquo;s speed and yaw-rate execution errors are represented by a structured, input-channel-matched disturbance model whose parameters are estimated online with an augmented-state extended Kalman filter. At every sampling instant, a single preview point defines a local zero-error target and an offset-free target input; an NMPC with input and input-rate constraints then regulates the augmented path-error state. A positive-definite position-heading coupled cost accommodates the transient heading deviation required by nonholonomic lateral correction. Parameter projection, a bounded parameter-update rate, a common terminal controller and a joint controller-estimator small-gain condition establish robust recursive feasibility and local input-to-state stability.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h3 id=&#34;main-contributions-2&#34;&gt;Main Contributions
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;A single-preview-point offset-free NMPC architecture is developed for continuous vehicle tracking. It computes an offset-free target input from the current reference speed, yaw rate and estimated mismatch parameters, rather than tracking a future discrete path sequence within one optimization.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;A positive-definite position-heading coupled cost $q_{la}(e_y+L_p e_\psi)^2+q_\psi e_\psi^2$ is introduced. It permits the temporary heading deviation that a nonholonomic vehicle needs to remove lateral error while retaining the definiteness required by NMPC Lyapunov analysis.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;EKF-driven online model adaptation is brought into a robust NMPC proof through parameter projection, parameter-rate limiting, target-input margins and common terminal ingredients. A controller-estimator small-gain condition yields joint local ISS, robust recursive feasibility and conditional asymptotic offset-free tracking.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/blockquote&gt;
+&lt;h3 id=&#34;research-methodology-2&#34;&gt;Research Methodology
+&lt;/h3&gt;&lt;p&gt;低速车辆常用低维运动学模型做实时 NMPC，但实际车辆的有效轴距、速度与角速度执行比例、死区、转向间隙、轮胎小侧偏和定位误差都会使对象偏离名义模型。直线上的偏差或许不明显，进入弯道后，速度、角速度和道路曲率耦合，持续失配会积累成横向与航向稳态误差。由此，车辆控制问题被抽象为：在输入及输入变化率受限、预测模型随在线估计而变化的条件下，如何让 NMPC 消除可解释的稳态偏差，并仍能证明递归可行性和闭环稳定性。&lt;/p&gt;
+&lt;p&gt;车辆以线速度和角速度为直接优化输入，状态满足&lt;/p&gt;
+$$
+x_k=\begin{bmatrix}p_{x,k}&amp;p_{y,k}&amp;\psi_k\end{bmatrix}^\mathsf{T},\qquad
+u_k=\begin{bmatrix}v_k&amp;\omega_k\end{bmatrix}^\mathsf{T},\qquad
+x_{k+1}=f(x_k,u_k).
+$$
+&lt;p&gt;在预瞄点的局部坐标系中，令路径误差为 $e_k=[e_{l,k},e_{y,k},e_{\psi,k}]^\mathsf{T}$。其连续时间误差动力学为&lt;/p&gt;
+$$
+\dot e_l=\bar v\cos e_\psi-v_r+\omega_r e_y,\qquad
+\dot e_y=\bar v\sin e_\psi-\omega_r e_l,\qquad
+\dot e_\psi=\bar\omega-\omega_r.
+$$
+&lt;p&gt;其中 $\rho_k=[v_{r,k},\omega_{r,k}]^\mathsf{T}$ 由当前前瞻预瞄点给出，且一次长度为 $N$ 的优化内固定使用同一个 $\rho_k$。这把沿路径的时变跟踪问题转化为该局部坐标中的零误差调节问题；下一采样时刻再依据新状态更新预瞄点。&lt;/p&gt;
+&lt;p&gt;为把系统性失配显式送入预测模型，论文构造输入通道匹配的等效输入映射&lt;/p&gt;
+$$
+\Gamma(u,\Theta)=
+\begin{bmatrix}
+(1+\theta_1)v+\theta_2\\
+(1+\theta_3+\theta_4v)\omega+\theta_5
+\end{bmatrix},\qquad
+x_{k+1}=f\bigl(x_k,\Gamma(u_k,\Theta_k)\bigr),
+$$
+&lt;p&gt;其中 $\Theta=[\theta_1,\theta_2,\theta_3,\theta_4,\theta_5]^\mathsf{T}$ 分别描述速度比例与偏置、角速度比例、速度相关角速度耦合和角速度偏置。EKF 对增广状态 $\xi_k=[x_k^\mathsf{T},\Theta_k^\mathsf{T}]^\mathsf{T}$ 递推估计，并通过投影与限速使在线模型始终留在已验证工作域内。&lt;/p&gt;
+&lt;p&gt;无偏的关键不是把估计扰动简单加到控制量上，而是为当前估计模型求一个严格匹配参考的目标输入 $u_s=S(\rho_k,\hat\Theta_k)$。对本文的扰动结构，它有闭式解&lt;/p&gt;
+$$
+v_s=\frac{v_r-\theta_2}{1+\theta_1},\qquad
+\omega_s=\frac{\omega_r-\theta_5}{1+\theta_3+\theta_4v_s},\qquad
+\Gamma(u_s,\hat\Theta_k)=\rho_k,
+$$
+&lt;p&gt;并要求 $u_s$ 位于收紧后的输入集合 $U_b=U\ominus B_{\epsilon_u}$，为末端局部反馈保留控制裕度。为同时处理输入变化率，论文使用增广状态和控制增量&lt;/p&gt;
+$$
+\chi_k=\begin{bmatrix}e_k\\u_{k-1}\end{bmatrix},\qquad
+\Delta u_k=u_k-u_{k-1},\qquad
+\chi_s(\beta_k)=\begin{bmatrix}0_3\\S(\beta_k)\end{bmatrix},\qquad
+z_k=\chi_k-\chi_s(\beta_k),
+$$
+&lt;p&gt;其中 $\beta_k=(\rho_k,\hat\Theta_k)$。为避免对航向误差施加过大权重而抑制必要的横向纠偏，路径代价采用位置–航向耦合项&lt;/p&gt;
+$$
+\ell_e(e)=q_le_l^2+q_{la}(e_y+L_pe_\psi)^2+q_\psi e_\psi^2=e^\mathsf{T}Q_e e,
+$$
+$$
+Q_e=
+\begin{bmatrix}
+q_l&amp;0&amp;0\\
+0&amp;q_{la}&amp;q_{la}L_p\\
+0&amp;q_{la}L_p&amp;q_{la}L_p^2+q_\psi
+\end{bmatrix}\succ0,\qquad
+e_\psi^\star=-\frac{q_{la}L_p}{q_{la}L_p^2+q_\psi}e_y.
+$$
+&lt;p&gt;因此，横向误差不为零时，代价会偏好一个方向正确、幅值有限的暂态航向误差；而当 $e_y\to0$ 时，$e_\psi^\star\to0$。最终，每个时刻求解带终端集的有限时域问题&lt;/p&gt;
+$$
+\begin{aligned}
+V_N^\star(\hat\chi_k,\beta_k)=\min_{\Delta u_{0|k},\ldots,\Delta u_{N-1|k}}\;&amp;
+\sum_{i=0}^{N-1}\left(z_{i|k}^\mathsf{T}Q_\chi z_{i|k}+\Delta u_{i|k}^\mathsf{T}R_{\Delta u}\Delta u_{i|k}\right)+V_f(z_{N|k})\\
+\text{s.t.}\quad&amp;\chi_{0|k}=\hat\chi_k,\\
+&amp;\chi_{i+1|k}=F_e(\chi_{i|k},\Delta u_{i|k};\beta_k),\\
+&amp;u_{i|k}\in U,\quad\Delta u_{i|k}\in\Delta U,\\
+&amp;z_{N|k}\in Z_f,\\
+&amp;\Delta u_k=\Delta u_{0|k}^\star,\\
+&amp;u_k=u_{k-1}+\Delta u_k.
+\end{aligned}
+$$
+&lt;h3 id=&#34;stability-and-feasibility-results-2&#34;&gt;Stability and Feasibility Results
+&lt;/h3&gt;&lt;p&gt;在线 EKF 使预测模型和目标输入均会变化，论文在线性化终端邻域内选取覆盖速度–曲率–参数工作域的公共反馈 $K_f$ 与终端矩阵 $P_f\succ0$，并令 $V_f(z)=z^\mathsf{T}P_fz$、$Z_f={z:z^\mathsf{T}P_fz\le\alpha_f}$。结合参数变化、状态估计误差、参考变化和剩余失配构成的综合扰动 $d_k$，可得到鲁棒递归可行性与 NMPC 最优值的下降界。若 EKF 在局部工作域也具有相应 Lyapunov 下降界，且控制器与估计器的交叉增益满足条件，就能得到联合 Lyapunov 函数。
+这给出控制器–估计器闭环的局部指数输入到状态稳定性，而不是未经条件限制的全局结论。当参考速度和曲率渐近恒定、参数估计收敛且剩余失配与测量噪声消失时，$e_l,e_y,e_\psi\to0$，实现渐近无偏跟踪；对持续但有界的曲率变化，误差只保证收敛到由参考变化率、估计误差和剩余失配共同决定的有界邻域。&lt;/p&gt;
+&lt;h2 id=&#34;double-loop-finite-time-disturbance-rejection-control-with-nonlinear-eso-for-autonomous-parking&#34;&gt;Double-loop finite-time disturbance rejection control with nonlinear ESO for autonomous parking
+&lt;/h2&gt;&lt;h3 id=&#34;abstract-3&#34;&gt;Abstract
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;p&gt;A double-loop finite-time disturbance rejection controller with nonlinear extended state observer (ESO) for autonomous parking is developed. The outer loop controller, designed via the backstepping method, generates the desired yaw angle rate. The inner-loop controller integrates a nonlinear feedback law enhanced by a nonlinear ESO, enabling high-precision regulation of the yaw rate.. To strengthen disturbance rejection capability, the generalized super-twisting function introduces linear and exponential components into the control law. Theoretical guarantees for system stability and finite-time convergence are formally derived through Lyapunov-based analysis. Experimental results on an autonomous vehicle platform demonstrates that the proposed double-loop finite-time disturbance rejection controller with nonlinear ESO achieves superior accuracy and robustness during autonomous parking.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h3 id=&#34;main-contributions-3&#34;&gt;Main Contributions
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;A double-loop finite-time controller integrating backstepping control and sliding mode feedback control is proposed in this paper to enhance tracking accuracy.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;A nonlinear ESO is developed to addresses unmodeled dynamics and external disturbances through estimation and compensation by employing generalized super-twisting function.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Experimental results on the autonomous vehicle platform verifies the superiority and reliability of the proposed algorithm.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/blockquote&gt;
+&lt;h3 id=&#34;research-methodology-3&#34;&gt;Research Methodology
+&lt;/h3&gt;&lt;p&gt;低速泊车时，转向机构响应、纵向速度误差、轮胎侧向力和外部扰动都会进入横摆角速度通道。只用运动学路径跟踪器，横向误差和航向误差即使被压小，也可能因实际横摆角速度跟不上而在窄车位内累积。论文将外环问题写成横向误差 $d_e$、航向误差 $\varphi_e$ 的反步控制，将内环问题写成带未知总扰动 $d(t)$ 的横摆角速度跟踪。&lt;/p&gt;
+&lt;p&gt;外环给出期望横摆角速度&lt;/p&gt;
+$$
+\omega_d(t)=\kappa(t)\frac{v_x(t)\cos\varphi_e(t)}{1-\kappa(t)d_e(t)}
+-(c_1+c_2)\varphi_e(t)-v_x(t)d_e(t).
+$$
+&lt;p&gt;令 $e_\omega=\omega-\omega_d$，非线性 ESO 估计扰动 $z_2\approx d(t)$，内环采用广义超扭曲形式的方向盘控制律&lt;/p&gt;
+$$
+\delta(t)=-\frac{1}{b}\left(k_1|e_\omega|^{1/2}\operatorname{sign}(e_\omega)
++k_2\operatorname{sign}(e_\omega)+k_3e_\omega+z_2-\dot{\omega}_d\right).
+$$
+&lt;p&gt;这使外环只处理几何跟踪，内环专门处理动态误差和扰动估计，避免让同一控制律同时承担两个尺度不同的问题。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://zouzhenshan.github.io/p/mpc-theory-and-vehicle-control-research-results/figure-double-loop-eso.jpg&#34;
+	width=&#34;6386&#34;
+	height=&#34;2250&#34;
+	srcset=&#34;https://zouzhenshan.github.io/p/mpc-theory-and-vehicle-control-research-results/figure-double-loop-eso_hu26f34b23b3f74fde23abfde3e87e992e_309285_480x0_resize_q75_box.jpg 480w, https://zouzhenshan.github.io/p/mpc-theory-and-vehicle-control-research-results/figure-double-loop-eso_hu26f34b23b3f74fde23abfde3e87e992e_309285_1024x0_resize_q75_box.jpg 1024w&#34;
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;双环抗扰控制器原图&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;283&#34;
+		data-flex-basis=&#34;681px&#34;
+	
+&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;论文 Fig. 3。外环路径跟踪控制器输出期望横摆角速度，内环非线性控制器与扩张状态观测器构成扰动估计和补偿闭环。&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;stability-and-feasibility-results-3&#34;&gt;Stability and Feasibility Results
+&lt;/h3&gt;&lt;p&gt;外环以横向误差能量作为 Lyapunov 函数，给定正的 $c_1,c_2$ 后，其导数为负，横向误差收敛到零。内环则把横摆误差与 ESO 估计误差合并进 Lyapunov 函数。只要控制增益与正定矩阵满足论文给出的矩阵不等式，复合 Lyapunov 函数满足有限时间稳定条件，横摆角速度误差和观测误差在有限时间内到达原点。对实际车辆而言，这一结论说明扰动不会被留在缓慢收敛的尾部，而会在参数条件成立时被快速压缩。&lt;/p&gt;
 </description>
         </item>
         <item>

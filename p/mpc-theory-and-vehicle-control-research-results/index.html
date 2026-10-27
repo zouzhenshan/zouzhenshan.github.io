@@ -1,18 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh-cn" dir="ltr">
     <head><meta charset='utf-8'>
-<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="车辆在狭窄车位中倒车时，曲率突变和安全约束可能导致规划路线不可跟踪；执行转向时，模型失配和外部扰动会把横摆响应拉离参考值；控制指令经 5G 往返云—端时，上下行时变时延会让原本正确的序列失效。四篇论文从这些现实问题出发，把它们分别抽象为带人工参考与碰撞约束的 NMPC、弹性收缩约束管的鲁棒 NMPC、带在线模型适配的无偏 NMPC，以及带未知总扰动的有限时间估计器，并给出可实现的控制器和理论条件。">
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="车辆在狭窄车位中倒车时，规划路径曲率突变和安全约束要求可能导致参考轨迹不可达；车辆执行转向时，MPC模型与真实模型的失配和外部扰动会导致跟踪效果有无法消除的稳态误差；车辆状态和控制指令经网络通信往返云—端时，上下行时变时延会让下发的控制序列存在安全隐患。四篇论文从这些现实问题出发，把它们分别抽象为带人工参考与碰撞约束的 NMPC、带弹性收缩约束管的鲁棒 NMPC、带在线模型适配估计的无偏 NMPC，以及对未知总扰动的有限时间估计器，并给出可实现的控制器和理论条件。">
 <title>模型预测控制理论与车辆控制应用研究成果</title>
 
 <link rel='canonical' href='https://zouzhenshan.github.io/p/mpc-theory-and-vehicle-control-research-results/'>
 
 <link rel="stylesheet" href="/scss/style.min.80dbf62ef43c0214823a0c5e456a86ea3529f480265468855ee2d3de09888b65.css"><meta property='og:title' content="模型预测控制理论与车辆控制应用研究成果">
-<meta property='og:description' content="车辆在狭窄车位中倒车时，曲率突变和安全约束可能导致规划路线不可跟踪；执行转向时，模型失配和外部扰动会把横摆响应拉离参考值；控制指令经 5G 往返云—端时，上下行时变时延会让原本正确的序列失效。四篇论文从这些现实问题出发，把它们分别抽象为带人工参考与碰撞约束的 NMPC、弹性收缩约束管的鲁棒 NMPC、带在线模型适配的无偏 NMPC，以及带未知总扰动的有限时间估计器，并给出可实现的控制器和理论条件。">
+<meta property='og:description' content="车辆在狭窄车位中倒车时，规划路径曲率突变和安全约束要求可能导致参考轨迹不可达；车辆执行转向时，MPC模型与真实模型的失配和外部扰动会导致跟踪效果有无法消除的稳态误差；车辆状态和控制指令经网络通信往返云—端时，上下行时变时延会让下发的控制序列存在安全隐患。四篇论文从这些现实问题出发，把它们分别抽象为带人工参考与碰撞约束的 NMPC、带弹性收缩约束管的鲁棒 NMPC、带在线模型适配估计的无偏 NMPC，以及对未知总扰动的有限时间估计器，并给出可实现的控制器和理论条件。">
 <meta property='og:url' content='https://zouzhenshan.github.io/p/mpc-theory-and-vehicle-control-research-results/'>
 <meta property='og:site_name' content='Z for 💤'>
 <meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:published_time' content='2026-08-17T00:00:00&#43;00:00'/><meta property='article:modified_time' content='2026-08-17T00:00:00&#43;00:00'/>
 <meta name="twitter:title" content="模型预测控制理论与车辆控制应用研究成果">
-<meta name="twitter:description" content="车辆在狭窄车位中倒车时，曲率突变和安全约束可能导致规划路线不可跟踪；执行转向时，模型失配和外部扰动会把横摆响应拉离参考值；控制指令经 5G 往返云—端时，上下行时变时延会让原本正确的序列失效。四篇论文从这些现实问题出发，把它们分别抽象为带人工参考与碰撞约束的 NMPC、弹性收缩约束管的鲁棒 NMPC、带在线模型适配的无偏 NMPC，以及带未知总扰动的有限时间估计器，并给出可实现的控制器和理论条件。">
+<meta name="twitter:description" content="车辆在狭窄车位中倒车时，规划路径曲率突变和安全约束要求可能导致参考轨迹不可达；车辆执行转向时，MPC模型与真实模型的失配和外部扰动会导致跟踪效果有无法消除的稳态误差；车辆状态和控制指令经网络通信往返云—端时，上下行时变时延会让下发的控制序列存在安全隐患。四篇论文从这些现实问题出发，把它们分别抽象为带人工参考与碰撞约束的 NMPC、带弹性收缩约束管的鲁棒 NMPC、带在线模型适配估计的无偏 NMPC，以及对未知总扰动的有限时间估计器，并给出可实现的控制器和理论条件。">
     <link rel="shortcut icon" href="/favicon.ico" />
 
   
@@ -151,7 +151,7 @@
     
         
         <h3 class="article-subtitle">
-            车辆在狭窄车位中倒车时，曲率突变和安全约束可能导致规划路线不可跟踪；执行转向时，模型失配和外部扰动会把横摆响应拉离参考值；控制指令经 5G 往返云—端时，上下行时变时延会让原本正确的序列失效。四篇论文从这些现实问题出发，把它们分别抽象为带人工参考与碰撞约束的 NMPC、弹性收缩约束管的鲁棒 NMPC、带在线模型适配的无偏 NMPC，以及带未知总扰动的有限时间估计器，并给出可实现的控制器和理论条件。
+            车辆在狭窄车位中倒车时，规划路径曲率突变和安全约束要求可能导致参考轨迹不可达；车辆执行转向时，MPC模型与真实模型的失配和外部扰动会导致跟踪效果有无法消除的稳态误差；车辆状态和控制指令经网络通信往返云—端时，上下行时变时延会让下发的控制序列存在安全隐患。四篇论文从这些现实问题出发，把它们分别抽象为带人工参考与碰撞约束的 NMPC、带弹性收缩约束管的鲁棒 NMPC、带在线模型适配估计的无偏 NMPC，以及对未知总扰动的有限时间估计器，并给出可实现的控制器和理论条件。
         </h3>
         
     </div>
@@ -188,30 +188,40 @@
     <section class="article-content">
     
     
-    <p>现两篇工作已发表见刊：</p>
-<p>H. Yang, Z. Zou, Y. Xia and P. Li, &ldquo;Artificial Reference-Based Terminal-Free NMPC for Autonomous Parking Among Irregularly Placed Vehicles,&rdquo; in <em>IEEE Transactions on Automation Science and Engineering</em>, vol. 23, pp. 7474-7484, 2026.</p>
+    <p>现有两篇工作已发表见刊：</p>
+<p>H. Yang, Z. Zou, Y. Xia and P. Li, &ldquo;Artificial Reference-Based Terminal-Free NMPC for Autonomous Parking Among Irregularly Placed Vehicles,&rdquo; <em>IEEE Transactions on Automation Science and Engineering</em>, vol. 23, pp. 7474-7484, 2026.</p>
 <p>Z. Zou, X. Liu, J. Yan, H. Yang and P. Li, &ldquo;Double-Loop Finite-Time Disturbance Rejection Control with Nonlinear ESO for Autonomous Parking,&rdquo; <em>2025 9th CAA International Conference on Vehicular Control and Intelligence (CVCI)</em>, Qingdao, China, 2025, pp. 1-6.</p>
+<p>另有一篇在审：</p>
+<p>H. Yang, Z. Zou, Y. Xia and P. Li, &ldquo;Elastic Tube MPC for Intelligent Connected Vehicles in a Cloud-Edge Collaborative Framework with Delay Compensation,&rdquo; <em>IEEE Transactions on Cybernetics.</em></p>
 <h2 id="artificial-reference-based-terminal-free-nmpc-for-autonomous-parking-among-irregularly-placed-vehicles">Artificial reference-based terminal-free NMPC for autonomous parking among irregularly placed vehicles
-</h2><h3 id="abstract">Abstract
+</h2><div class="video-wrapper">
+    <video
+    controls
+    src="artificial-reference-terminal-free-nmpc-parking-3x.mp4"
+    
+    
+    >
+        <p>
+            Your browser doesn't support HTML5 video. Here is a
+            <a href="artificial-reference-terminal-free-nmpc-parking-3x.mp4">link to the video</a> instead.
+        </p>
+    </video>
+</div>
+
+<h3 id="abstract">Abstract
 </h3><blockquote>
 <p>In this paper, an artificial reference-based terminal-free nonlinear model predictive control (NMPC) strategy is proposed for autonomous parking in constrained scenarios. Artificial References are introduced as additional decision variables in terminal-free NMPC to effectively integrate local planning and motion control. Both a terminal constraint and a terminal cost are removed in terminal-free NMPC to improve practical feasibility. Smooth and differentiable collision avoidance constraints are employed to ensure safety in irregularly confined environments. Stability and recursive feasibility are analyzed through a sufficiently large prediction horizon and forward invariant set theory. Experiment results demonstrate effectiveness and superiority of the proposed artificial reference-based terminal-free NMPC strategy for autonomous parking among irregularly placed vehicles.</p>
 </blockquote>
 <h3 id="main-contributions">Main Contributions
 </h3><blockquote>
 <ol>
-<li>
-<p>Artificial reference variables and collision avoidance constraints are incorporated into MPC to integrate local planning and motion control.</p>
-</li>
-<li>
-<p>NMPC without terminal costs or terminal constraints is designed to reduce computational demand and enhance solvability in implementation.</p>
-</li>
-<li>
-<p>Stability and recursive feasibility are analyzed by selecting proper prediction horizon and establishing forward invariant set in the NMPC.</p>
-</li>
+<li>Artificial reference variables and collision avoidance constraints are incorporated into MPC to integrate local planning and motion control.</li>
+<li>NMPC without terminal costs or terminal constraints is designed to reduce computational demand and enhance solvability in implementation.</li>
+<li>Stability and recursive feasibility are analyzed by selecting proper prediction horizon and establishing forward invariant set in the NMPC.</li>
 </ol>
 </blockquote>
 <h3 id="research-methodology">Research Methodology
-</h3><p>邻车越界后，车位不再是规则矩形，Hybrid A star 生成的带有曲率突变的粗路径可能存在车辆在当前动力学与安全距离下到不了的位置。针对这类“参考轨迹不可达”问题，本文基于Artificial Reference MPC框架涉及控制器，将局部规划与控制统一。真实车辆状态 $x$ 和输入 $u$ 跟随人工参考 $(x_A,u_A)$，人工参考再尽量贴近原始规划参考 $(x_r,u_r)$。</p>
+</h3><p>邻车越界后，车位不再是规则矩形，Hybrid A star 生成的带有曲率突变的粗路径可能存在车辆在当前动力学与安全距离下到达不了的位置。针对这类“参考轨迹不可达”问题，本文基于Artificial Reference MPC框架涉及控制器，将局部规划与控制统一。真实车辆状态 $x$ 和输入 $u$ 跟随人工参考 $(x_A,u_A)$，人工参考再尽量贴近原始规划参考 $(x_r,u_r)$。</p>
 $$
 \begin{aligned}
 \min_{x,u,x_A,u_A,\mu,\nu}\quad
@@ -229,7 +239,7 @@ J_N = &\sum_{j=0}^{N-1}\left(\lVert x_A(j|k)-x(j|k)\rVert_Q^2
 &j=1,\ldots,N,\qquad i=1,\ldots,I.
 \end{aligned}
 $$
-<p>$B(x)=R(x)B_O+\iota(x)$ 表示车辆矩形经过旋转和平移后的占用集合，$O_i={y\mid A_i y\le b_i}$ 表示第 $i$ 个凸障碍物，$\mu_i,\nu_i$ 是用于将非光滑集合不相交条件转化为光滑约束的对偶变量。人工参考不是在优化前固定生成，它与控制序列一起在每个采样时刻重新求解。这样，车辆不必死跟一条局部不可达的路线，而是在原始路线、车辆动力学和障碍物安全距离之间寻找可行折中。最后，在保证可行性与稳定性前提下，移除了传统 MPC 中难以离线设计的终端代价与终端约束，缓解求解失败问题。</p>
+<p>$B(x)=R(x)B_O+\iota(x)$ 表示车辆矩形经过旋转和平移后的占用集合，$O_i={y\mid A_i y\le b_i}$ 表示第 $i$ 个凸障碍物，$\mu_i,\nu_i$ 是用于将非光滑集合不相交条件转化为光滑约束的对偶变量。人工参考不是在优化前固定生成，它与控制序列一起在每个采样时刻重新求解。这样，车辆不必死跟一条局部不可达的路线，而是在原始路线、车辆动力学和障碍物安全距离之间动态寻找可行折中。最后，在保证可行性与稳定性前提下，移除了传统 MPC 中难以离线设计的终端代价与终端约束，缓解求解失败问题。</p>
 <p><img src="/p/mpc-theory-and-vehicle-control-research-results/figure-terminal-free-nmpc.jpg"
 	width="1202"
 	height="1179"
@@ -246,7 +256,7 @@ $$
 ></p>
 <p><em>环境信息首先提供障碍物位置，Hybrid A star 生成粗全局轨迹，人工参考终端自由 NMPC 在此基础上联合完成局部规划与运动控制。</em></p>
 <h3 id="stability-and-feasibility-results">Stability and Feasibility Results
-</h3><p>论文用最优代价减去人工参考到原始参考的最小代价构造 Lyapunov 函数。对足够长的预测域，代价沿闭环轨迹下降，实际状态渐近收敛到最优可达人工参考附近。可行性证明依赖两个要点。其一，人工参考本身在每一步都是受同一动力学和输入约束限制的决策序列。其二，在正向不变集的一个局部邻域内存在可行局部控制律。由此可把当前可行解移位为下一时刻的候选解，得到递归可行性。这里的稳定目标是收敛到可达人工参考，而非强行收敛到可能不可达的粗规划轨迹。</p>
+</h3><p>论文用最优代价减去人工参考到原始参考的最小代价构造 Lyapunov 函数。对足够长的预测时域，代价沿闭环轨迹下降，实际状态渐近收敛到最优可达人工参考附近。可行性证明依赖两个要点。其一，人工参考本身在每一步都是受同一动力学和输入约束限制的决策序列。其二，在正向不变集的一个局部邻域内存在可行局部控制律。由此可把当前可行解移位为下一时刻的候选解，得到递归可行性。这里的稳定目标是收敛到可达人工参考，而非强行收敛到可能不可达的粗规划轨迹。</p>
 <h2 id="elastic-tube-mpc-for-intelligent-connected-vehicles-in-a-cloud-edge-collaborative-framework-with-delay-compensation">Elastic tube MPC for intelligent connected vehicles in a cloud-edge collaborative framework with delay compensation
 </h2><h3 id="abstract-1">Abstract
 </h3><blockquote>
@@ -255,15 +265,9 @@ $$
 <h3 id="main-contributions-1">Main Contributions
 </h3><blockquote>
 <ol>
-<li>
-<p>Bidirectional delays are handled by cloud-side estimation and vehicle-side compensation in a cloud-edge collaborative framework using elastic tube MPC.</p>
-</li>
-<li>
-<p>Zonotope-based RPI set generation and elastic tube optimization are introduced into the tube MPC for computational feasibility and control performance.</p>
-</li>
-<li>
-<p>A tube contraction technology and a prediction horizon lower bound are utilized to analyze input-to-state stability and recursive feasibility for the elastic tube MPC.</p>
-</li>
+<li>Bidirectional delays are handled by cloud-side estimation and vehicle-side compensation in a cloud-edge collaborative framework using elastic tube MPC.</li>
+<li>Zonotope-based RPI set generation and elastic tube optimization are introduced into the tube MPC for computational feasibility and control performance.</li>
+<li>A tube contraction technology and a prediction horizon lower bound are utilized to analyze input-to-state stability and recursive feasibility for the elastic tube MPC.</li>
 </ol>
 </blockquote>
 <h3 id="research-methodology-1">Research Methodology
@@ -328,7 +332,7 @@ $$
 $$
 u(k)=\bar u\bigl(\tau_d(k_r)\mid k_r\bigr)+K(k)\tilde e(k).
 $$
-<p>时间戳匹配避免执行过期首项，局部 LQR 将实际状态拉回名义轨迹周围的弹性管内。</p>
+<p>时间戳匹配避免执行过期控制指令，局部 LQR 将实际状态拉回名义轨迹周围的弹性管内。</p>
 <p><img src="/p/mpc-theory-and-vehicle-control-research-results/figure-elastic-tube-mpc.png"
 	width="1262"
 	height="1008"
@@ -350,37 +354,31 @@ $$
 <h2 id="ekf-based-offset-free-nmpc-with-joint-controller-estimator-robust-stability-for-autonomous-vehicles-under-model-mismatch">EKF-based offset-free NMPC with joint controller-estimator robust stability for autonomous vehicles under model mismatch
 </h2><h3 id="abstract-2">Abstract
 </h3><blockquote>
-<p>This paper proposes an EKF-based offset-free nonlinear model predictive control method for autonomous vehicles under kinematic model mismatch. The vehicle&rsquo;s speed and yaw-rate execution errors are represented by a structured, input-channel-matched disturbance model whose parameters are estimated online with an augmented-state extended Kalman filter. At every sampling instant, a single preview point defines a local zero-error target and an offset-free target input; an NMPC with input and input-rate constraints then regulates the augmented path-error state. A positive-definite position-heading coupled cost accommodates the transient heading deviation required by nonholonomic lateral correction. Parameter projection, a bounded parameter-update rate, a common terminal controller and a joint controller-estimator small-gain condition establish robust recursive feasibility and local input-to-state stability.</p>
+<p>This paper proposes an EKF-based offset-free nonlinear model predictive control method for autonomous vehicles under kinematic model mismatch. The vehicle&rsquo;s speed and yaw angle errors are represented by a structured, input-channel-matched disturbance model whose parameters are estimated online with an augmented-state extended Kalman filter. At every sampling instant, an offset-free target input is obtained an NMPC with input and input-rate constraints then regulates the augmented state. A positive-definite position-heading coupled cost accommodates the transient yaw angle deviation required by nonholonomic lateral correction. Parameter projection, a bounded parameter-update rate, a common terminal controller and a joint controller-estimator small-gain condition establish robust recursive feasibility and local input-to-state stability.</p>
 </blockquote>
 <h3 id="main-contributions-2">Main Contributions
 </h3><blockquote>
 <ol>
-<li>
-<p>A single-preview-point offset-free NMPC architecture is developed for continuous vehicle tracking. It computes an offset-free target input from the current reference speed, yaw rate and estimated mismatch parameters, rather than tracking a future discrete path sequence within one optimization.</p>
-</li>
-<li>
-<p>A positive-definite position-heading coupled cost $q_{la}(e_y+L_p e_\psi)^2+q_\psi e_\psi^2$ is introduced. It permits the temporary heading deviation that a nonholonomic vehicle needs to remove lateral error while retaining the definiteness required by NMPC Lyapunov analysis.</p>
-</li>
-<li>
-<p>EKF-driven online model adaptation is brought into a robust NMPC proof through parameter projection, parameter-rate limiting, target-input margins and common terminal ingredients. A controller-estimator small-gain condition yields joint local ISS, robust recursive feasibility and conditional asymptotic offset-free tracking.</p>
-</li>
+<li>An offset-free NMPC architecture under model mismatch is developed for continuous vehicle tracking. It computes an offset-free target input from the current reference trajectory and estimated mismatch parameters.</li>
+<li>A positive-definite position-heading coupled cost is introduced. It permits the temporary yaw angle deviation that a nonholonomic vehicle needs to remove lateral error while retaining the definiteness required by NMPC Lyapunov analysis.</li>
+<li>EKF-driven online model adaptation is brought into a robust NMPC proof through parameter projection, parameter-rate limiting, target-input margins and common terminal ingredients. A controller-estimator small-gain condition yields joint local ISS and robust recursive feasibility.</li>
 </ol>
 </blockquote>
 <h3 id="research-methodology-2">Research Methodology
-</h3><p>低速车辆常用低维运动学模型做实时 NMPC，但实际车辆的有效轴距、速度与角速度执行比例、死区、转向间隙、轮胎小侧偏和定位误差都会使对象偏离名义模型。直线上的偏差或许不明显，进入弯道后，速度、角速度和道路曲率耦合，持续失配会积累成横向与航向稳态误差。由此，车辆控制问题被抽象为：在输入及输入变化率受限、预测模型随在线估计而变化的条件下，如何让 NMPC 消除可解释的稳态偏差，并仍能证明递归可行性和闭环稳定性。</p>
+</h3><p>低速车辆常用低维运动学模型做实时 NMPC，但实际车辆的有效轴距、速度与角速度执行比例、死区、转向间隙、轮胎小侧偏和定位误差都会使对象偏离名义模型。直线上的偏差或许不明显，进入大曲率弯道后，速度、角速度和道路曲率耦合，持续失配会积累成横向与航向稳态误差。由此，车辆控制问题被抽象为：在输入及输入变化率受限、预测模型随在线估计而变化的条件下，如何让 NMPC 消除可预见的稳态偏差，并仍能证明递归可行性和闭环稳定性。</p>
 <p>车辆以线速度和角速度为直接优化输入，状态满足</p>
 $$
 x_k=\begin{bmatrix}p_{x,k}&p_{y,k}&\psi_k\end{bmatrix}^\mathsf{T},\qquad
 u_k=\begin{bmatrix}v_k&\omega_k\end{bmatrix}^\mathsf{T},\qquad
 x_{k+1}=f(x_k,u_k).
 $$
-<p>在预瞄点的局部坐标系中，令路径误差为 $e_k=[e_{l,k},e_{y,k},e_{\psi,k}]^\mathsf{T}$。其连续时间误差动力学为</p>
+<p>在参考轨迹点的局部坐标系中，令路径误差为 $e_k=[e_{l,k},e_{y,k},e_{\psi,k}]^\mathsf{T}$。其连续时间误差动力学为</p>
 $$
 \dot e_l=\bar v\cos e_\psi-v_r+\omega_r e_y,\qquad
 \dot e_y=\bar v\sin e_\psi-\omega_r e_l,\qquad
 \dot e_\psi=\bar\omega-\omega_r.
 $$
-<p>其中 $\rho_k=[v_{r,k},\omega_{r,k}]^\mathsf{T}$ 由当前前瞻预瞄点给出，且一次长度为 $N$ 的优化内固定使用同一个 $\rho_k$。这把沿路径的时变跟踪问题转化为该局部坐标中的零误差调节问题；下一采样时刻再依据新状态更新预瞄点。</p>
+<p>其中 $\rho_k=[v_{r,k},\omega_{r,k}]^\mathsf{T}$ 为参考控制输入，且一次预测时域为 $N$ 的优化内固定使用同一个 $\rho_k$。</p>
 <p>为把系统性失配显式送入预测模型，论文构造输入通道匹配的等效输入映射</p>
 $$
 \Gamma(u,\Theta)=
@@ -432,7 +430,7 @@ V_N^\star(\hat\chi_k,\beta_k)=\min_{\Delta u_{0|k},\ldots,\Delta u_{N-1|k}}\;&
 $$
 <h3 id="stability-and-feasibility-results-2">Stability and Feasibility Results
 </h3><p>在线 EKF 使预测模型和目标输入均会变化，论文在线性化终端邻域内选取覆盖速度–曲率–参数工作域的公共反馈 $K_f$ 与终端矩阵 $P_f\succ0$，并令 $V_f(z)=z^\mathsf{T}P_fz$、$Z_f={z:z^\mathsf{T}P_fz\le\alpha_f}$。结合参数变化、状态估计误差、参考变化和剩余失配构成的综合扰动 $d_k$，可得到鲁棒递归可行性与 NMPC 最优值的下降界。若 EKF 在局部工作域也具有相应 Lyapunov 下降界，且控制器与估计器的交叉增益满足条件，就能得到联合 Lyapunov 函数。
-这给出控制器–估计器闭环的局部指数输入到状态稳定性，而不是未经条件限制的全局结论。当参考速度和曲率渐近恒定、参数估计收敛且剩余失配与测量噪声消失时，$e_l,e_y,e_\psi\to0$，实现渐近无偏跟踪；对持续但有界的曲率变化，误差只保证收敛到由参考变化率、估计误差和剩余失配共同决定的有界邻域。</p>
+这给出控制器–估计器闭环的局部指数输入到状态稳定性，而不是未经条件限制的全局结论。对持续但有界的曲率变化，误差只保证收敛到由参考变化率、估计误差和剩余失配共同决定的有界邻域。</p>
 <h2 id="double-loop-finite-time-disturbance-rejection-control-with-nonlinear-eso-for-autonomous-parking">Double-loop finite-time disturbance rejection control with nonlinear ESO for autonomous parking
 </h2><h3 id="abstract-3">Abstract
 </h3><blockquote>
@@ -441,15 +439,9 @@ $$
 <h3 id="main-contributions-3">Main Contributions
 </h3><blockquote>
 <ol>
-<li>
-<p>A double-loop finite-time controller integrating backstepping control and sliding mode feedback control is proposed in this paper to enhance tracking accuracy.</p>
-</li>
-<li>
-<p>A nonlinear ESO is developed to addresses unmodeled dynamics and external disturbances through estimation and compensation by employing generalized super-twisting function.</p>
-</li>
-<li>
-<p>Experimental results on the autonomous vehicle platform verifies the superiority and reliability of the proposed algorithm.</p>
-</li>
+<li>A double-loop finite-time controller integrating backstepping control and sliding mode feedback control is proposed in this paper to enhance tracking accuracy.</li>
+<li>A nonlinear ESO is developed to addresses unmodeled dynamics and external disturbances through estimation and compensation by employing generalized super-twisting function.</li>
+<li>Experimental results on the autonomous vehicle platform verifies the superiority and reliability of the proposed algorithm.</li>
 </ol>
 </blockquote>
 <h3 id="research-methodology-3">Research Methodology
